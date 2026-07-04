@@ -355,26 +355,58 @@ namespace TenderDocGen
                 UiTheme.StyleForm(f);
                 f.FormBorderStyle = FormBorderStyle.FixedDialog;
                 f.StartPosition = FormStartPosition.CenterParent;
-                f.MinimizeBox = false; f.MaximizeBox = false;
-                f.ClientSize = new Size(460, 240);
+                f.MinimizeBox = false; f.MaximizeBox = false; f.ShowInTaskbar = false;
+                // 版面 AutoSize（隨字型/DPI 自適應，不用固定像素座標）
+                f.AutoSize = true;
+                f.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+
+                TableLayoutPanel tp = new TableLayoutPanel();
+                tp.Dock = DockStyle.Fill; tp.AutoSize = true; tp.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+                tp.ColumnCount = 1; tp.RowCount = 4;
+                tp.Padding = new Padding(22, 18, 22, 16);
+                tp.BackColor = UiTheme.BgMain;
+                tp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+                for (int i = 0; i < 4; i++) tp.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
                 Label lbl = new Label();
-                lbl.Text = "參數名稱（會成為 Excel 欄位名）："; lbl.SetBounds(18, 18, 420, 24); lbl.AutoSize = true;
-                lbl.ForeColor = UiTheme.TextSecondary;
-                TextBox txt = new TextBox(); txt.SetBounds(18, 48, 424, 30); UiTheme.StyleTextBox(txt);
-                GroupBox gb = new GroupBox();
-                gb.Text = "這個參數的類型"; gb.SetBounds(18, 90, 424, 92); gb.ForeColor = UiTheme.TextPrimary;
-                RadioButton rbCase = new RadioButton();
-                rbCase.Text = "每案不同（填在「標案清單」每一列）"; rbCase.SetBounds(16, 28, 390, 26); rbCase.Checked = true;
-                RadioButton rbCompany = new RadioButton();
-                rbCompany.Text = "公司固定（填一次在「公司資料」）"; rbCompany.SetBounds(16, 56, 390, 26);
-                gb.Controls.Add(rbCase); gb.Controls.Add(rbCompany);
+                lbl.Text = "參數名稱（會成為 Excel 欄位名）"; lbl.AutoSize = true;
+                lbl.ForeColor = UiTheme.TextSecondary; lbl.Margin = new Padding(0, 0, 0, 6);
 
+                TextBox txt = new TextBox();
+                txt.Dock = DockStyle.Fill; txt.MinimumSize = new Size(360, 0);
+                UiTheme.StyleTextBox(txt); txt.Margin = new Padding(0, 0, 0, 16);
+
+                GroupBox gb = new GroupBox();
+                gb.Text = "這個參數的類型"; gb.AutoSize = true; gb.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+                gb.ForeColor = UiTheme.TextPrimary; gb.Dock = DockStyle.Fill; gb.Margin = new Padding(0, 0, 0, 16);
+                FlowLayoutPanel radios = new FlowLayoutPanel();
+                radios.Dock = DockStyle.Fill; radios.FlowDirection = FlowDirection.TopDown;
+                radios.AutoSize = true; radios.WrapContents = false; radios.Padding = new Padding(12, 8, 12, 10);
+                RadioButton rbCase = new RadioButton();
+                rbCase.Text = "每案不同（填在「標案清單」每一列）"; rbCase.AutoSize = true; rbCase.Checked = true;
+                rbCase.Margin = new Padding(0, 4, 0, 4); rbCase.ForeColor = UiTheme.TextPrimary;
+                RadioButton rbCompany = new RadioButton();
+                rbCompany.Text = "公司固定（填一次在「公司資料」）"; rbCompany.AutoSize = true;
+                rbCompany.Margin = new Padding(0, 4, 0, 4); rbCompany.ForeColor = UiTheme.TextPrimary;
+                radios.Controls.Add(rbCase); radios.Controls.Add(rbCompany);
+                gb.Controls.Add(radios);
+
+                FlowLayoutPanel btns = new FlowLayoutPanel();
+                btns.Dock = DockStyle.Fill; btns.FlowDirection = FlowDirection.RightToLeft; btns.AutoSize = true;
                 Button ok = new Button();
-                ok.Text = "確定"; ok.DialogResult = DialogResult.OK; ok.SetBounds(248, 196, 92, 34); UiTheme.StylePrimary(ok);
+                ok.Text = "確定"; ok.DialogResult = DialogResult.OK; ok.AutoSize = true;
+                ok.Padding = new Padding(22, 8, 22, 8); UiTheme.StylePrimary(ok);
                 Button cancel = new Button();
-                cancel.Text = "取消"; cancel.DialogResult = DialogResult.Cancel; cancel.SetBounds(348, 196, 92, 34); UiTheme.StyleButton(cancel);
-                f.Controls.AddRange(new Control[] { lbl, txt, gb, ok, cancel });
+                cancel.Text = "取消"; cancel.DialogResult = DialogResult.Cancel; cancel.AutoSize = true;
+                cancel.Padding = new Padding(18, 8, 18, 8); cancel.Margin = new Padding(0, 0, 12, 0);
+                UiTheme.StyleButton(cancel);
+                btns.Controls.Add(ok); btns.Controls.Add(cancel);
+
+                tp.Controls.Add(lbl, 0, 0);
+                tp.Controls.Add(txt, 0, 1);
+                tp.Controls.Add(gb, 0, 2);
+                tp.Controls.Add(btns, 0, 3);
+                f.Controls.Add(tp);
                 f.AcceptButton = ok; f.CancelButton = cancel;
 
                 if (f.ShowDialog(owner) != DialogResult.OK) return null;
