@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>標案文件產生器 — 使用說明</title>
+<style>
+  :root{
+    --bg:#FBF7EF; --card:#FFFCF7; --accent-bg:#F0E6D2; --subtle:#F5EFE3;
+    --border:#E0D4BC; --border-strong:#C9B89C;
+    --primary:#C4823C; --primary-dark:#9B5C24; --primary-light:#F4E6CD;
+    --text:#3A2E20; --text-2:#7A6857; --text-muted:#A89888;
+    --success:#7A9963; --success-dark:#5C7A48; --success-light:#E8EFD8;
+    --warning:#D69830; --warning-light:#FBEACC;
+    --error:#B5523B; --error-light:#F4DCD3;
+    --info:#5A7290; --info-light:#E0E7EE;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Microsoft JhengHei UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+    line-height:1.7; font-size:16px;
+  }
+  .wrap{max-width:900px; margin:0 auto; padding:0 20px 64px;}
+
+  header.top{
+    background:var(--card); border-bottom:1px solid var(--border);
+    padding:28px 0 24px; margin-bottom:28px;
+  }
+  header.top .wrap{display:flex; align-items:center; gap:16px; padding-bottom:0;}
+  .bar{width:6px; height:44px; background:var(--primary); border-radius:3px; flex:0 0 auto;}
+  header.top h1{margin:0; font-size:28px; font-weight:700; letter-spacing:.5px;}
+  header.top .sub{margin:2px 0 0; color:var(--text-2); font-size:15px;}
+
+  .lead{
+    background:var(--primary-light); border:1px solid var(--border-strong);
+    border-radius:12px; padding:18px 22px; margin:0 0 28px; font-size:16px;
+  }
+  .lead b{color:var(--primary-dark);}
+
+  section{
+    background:var(--card); border:1px solid var(--border);
+    border-radius:14px; padding:24px 26px; margin:0 0 22px;
+  }
+  h2{
+    margin:0 0 18px; font-size:20px; font-weight:700; color:var(--text);
+    display:flex; align-items:center; gap:12px;
+  }
+  h2::before{content:""; width:5px; height:22px; background:var(--primary); border-radius:3px;}
+  h2 .tag{
+    font-size:12px; font-weight:600; color:var(--text-2); background:var(--subtle);
+    border:1px solid var(--border); border-radius:20px; padding:2px 10px; margin-left:auto;
+  }
+  h3{margin:22px 0 10px; font-size:16px; font-weight:700; color:var(--primary-dark);}
+
+  /* 檔案清單 */
+  .files{list-style:none; margin:0; padding:0;}
+  .files li{
+    display:flex; gap:14px; align-items:baseline; padding:8px 0;
+    border-bottom:1px dashed var(--border);
+  }
+  .files li:last-child{border-bottom:none;}
+  .files code{
+    flex:0 0 auto; min-width:190px; font-family:Consolas,"Courier New",monospace;
+    background:var(--subtle); border:1px solid var(--border); border-radius:6px;
+    padding:2px 8px; color:var(--primary-dark); font-size:14px;
+  }
+  .files span{color:var(--text-2);}
+
+  /* 步驟 */
+  ol.steps{counter-reset:s; list-style:none; margin:0; padding:0;}
+  ol.steps>li{
+    counter-increment:s; position:relative; padding:4px 0 16px 46px; margin:0;
+  }
+  ol.steps>li::before{
+    content:counter(s); position:absolute; left:0; top:2px;
+    width:30px; height:30px; border-radius:50%;
+    background:var(--primary); color:#FFFCF7; font-weight:700; font-size:15px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  ol.steps>li b{color:var(--text);}
+  ol.steps ul{margin:8px 0 0; padding-left:20px;}
+  ol.steps ul li{margin:4px 0; color:var(--text-2);}
+  ol.steps ul li b{color:var(--text);}
+
+  /* 提示框 */
+  .note{
+    border-radius:10px; padding:14px 18px; margin:16px 0 0; font-size:15px;
+    border:1px solid; display:flex; gap:12px; align-items:flex-start;
+  }
+  .note .ic{flex:0 0 auto; font-size:18px; line-height:1.4;}
+  .note.tip{background:var(--info-light); border-color:#B9C7D6; color:#2f4763;}
+  .note.warn{background:var(--warning-light); border-color:#E6C079; color:#7a5410;}
+  .note.danger{background:var(--error-light); border-color:#DBA495; color:#7a2e20;}
+
+  /* 顏色標示 */
+  .swatch{display:inline-block; width:15px; height:15px; border-radius:4px; vertical-align:-2px; margin-right:4px; border:1px solid rgba(0,0,0,.15);}
+  .red{background:#e53935;} .blue{background:#1e88e5;}
+
+  /* FAQ */
+  .faq{margin:0;}
+  .faq .q{font-weight:700; color:var(--primary-dark); margin:18px 0 4px; display:flex; gap:8px;}
+  .faq .q::before{content:"Q"; background:var(--primary); color:#fff; border-radius:6px; width:22px; height:22px; font-size:13px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;}
+  .faq .a{margin:0 0 6px 30px; color:var(--text-2);}
+  .faq .a b{color:var(--text);}
+  .faq hr{border:none; border-top:1px dashed var(--border); margin:14px 0;}
+
+  .btn{
+    display:inline-block; background:var(--card); border:1px solid var(--border-strong);
+    border-radius:6px; padding:1px 9px; font-size:14px; color:var(--text); white-space:nowrap;
+  }
+  .btn.primary{background:var(--primary); border-color:var(--primary-dark); color:#FFFCF7; font-weight:600;}
+  .btn.danger{background:var(--error); border-color:#8E3E2D; color:#FFFCF7; font-weight:600;}
+
+  footer{text-align:center; color:var(--text-muted); font-size:13px; margin-top:8px;}
+
+  @media (max-width:560px){
+    body{font-size:15px;}
+    .files li{flex-direction:column; gap:2px;}
+    .files code{min-width:0;}
+    header.top h1{font-size:23px;}
+  }
+</style>
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="bar"></div>
+      <div>
+        <h1>標案文件產生器</h1>
+        <p class="sub">行政人員使用說明</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <p class="lead">
+      這個工具會依照 Excel 裡填的標案資料，自動產生
+      <b>保密切結書、保密同意書、著作權同意書</b>等文件（ODT 格式），
+      並把公司名稱、負責人、電話、地址、機關名稱、案名、簽署日期等欄位自動填好。
+      <br><b>免安裝</b>——把資料夾複製到哪都能用，雙擊 exe 即可。
+    </p>
+
+    <section>
+      <h2>這個資料夾裡有什麼</h2>
+      <ul class="files">
+        <li><code>標案文件產生器.exe</code><span>要執行的程式（雙擊它）</span></li>
+        <li><code>標案資料.xlsx</code><span>你要填寫的 Excel</span></li>
+        <li><code>範本\</code><span>文件範本（請勿更動裡面的檔案）</span></li>
+        <li><code>使用說明.txt／.html</code><span>就是本說明（.html 版用瀏覽器開較好讀）</span></li>
+      </ul>
+      <div class="note tip"><span class="ic">💡</span>
+        <span><code style="background:var(--subtle);padding:1px 6px;border-radius:5px;">輸出\</code> 與
+        <code style="background:var(--subtle);padding:1px 6px;border-radius:5px;">設定.txt</code>
+        會在你開始使用後由程式自動產生，不用理會。</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>第一次使用<span class="tag">只需做一次</span></h2>
+      <ol class="steps">
+        <li>打開 <b>「標案資料.xlsx」</b>。</li>
+        <li>切到 <b>「公司資料」</b> 工作表，填好：<b>廠商名稱、負責人姓名、聯絡電話、廠商地址</b>。
+          <ul><li>這些是公司固定資料，之後每個標案都會自動帶入，不用再填。</li></ul>
+        </li>
+        <li>存檔。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>每接一個新標案</h2>
+      <ol class="steps">
+        <li>打開「標案資料.xlsx」，切到 <b>「標案清單」</b> 工作表。</li>
+        <li>在最下面新增一列，填寫：
+          <ul>
+            <li><b>標案名稱</b>：必填。這會變成輸出資料夾的名字。</li>
+            <li><b>機關名稱</b>：招標的機關，例如「花蓮縣政府」。</li>
+            <li><b>案件名稱</b>：文件裡引用的正式案名（留空 → 直接用「標案名稱」）。</li>
+            <li><b>簽署日期</b>：民國格式，如 <b>115年8月1日</b> 或 <b>115/8/1</b>（留空 → 用產生當天）。</li>
+            <li><b>產生:○○○</b> 這幾欄：選「是」或「否」，決定要產生哪些文件（留空視同「是」）。</li>
+            <li><b>備註</b>：自由填寫，不會出現在文件裡。</li>
+          </ul>
+        </li>
+        <li>存檔，並<b>關閉 Excel</b>（重要，不然程式可能讀不到最新內容）。</li>
+        <li>雙擊 <b>「標案文件產生器.exe」</b>。</li>
+        <li>在清單中勾選要產生的標案（預設會自動勾選還沒產生過的），按 <span class="btn primary">✔ 產生文件</span>。</li>
+        <li>完成後可按 <span class="btn">📂 開啟輸出資料夾</span> 查看。文件在 <code style="background:var(--subtle);padding:1px 6px;border-radius:5px;">（輸出資料夾）\（你的標案名稱）\</code>。</li>
+      </ol>
+      <div class="note tip"><span class="ic">📁</span>
+        <span>輸出資料夾預設是程式旁的「輸出」。想改到別的位置（例如共用磁碟），按畫面上方「輸出資料夾」右邊的
+        <span class="btn">變更…</span>，程式會記住，下次開啟仍沿用。</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>範本管理：新增／移除文件範本<span class="tag">進階</span></h2>
+      <p style="margin-top:0;color:var(--text-2);">
+        以後若要增減文件種類，不用找工程師。開程式後按上方 <span class="btn">🗂 範本管理…</span>，
+        即可看到目前所有範本與它們用到的參數，並可新增或移除。
+      </p>
+
+      <h3>新增一種文件範本</h3>
+      <ol class="steps">
+        <li>準備一份該文件的 ODT，把「要每次替換的文字」標上顏色：
+          <ul>
+            <li><span class="swatch red"></span><b>紅色</b>＝公司固定資料（公司名、負責人、電話、地址）</li>
+            <li><span class="swatch blue"></span><b>藍色</b>＝每案不同的資料（機關、案名、日期…）</li>
+          </ul>
+          <span style="color:var(--text-muted);font-size:14px;">（顏色只是給工具辨識用，產生出來的正式文件會是黑字。）</span>
+        </li>
+        <li>在「範本管理」按 <span class="btn primary">＋ 新增範本…</span>，選那份 ODT。工具會列出所有彩色片段並盡量幫你對好參數：
+          <ul>
+            <li>已知的公司資料會<b>自動對應</b>（顯示廠商名稱、聯絡電話…）。</li>
+            <li>新的欄位會顯示「（請選擇）」，可從下拉選現有參數，或選「＋ 新增參數…」自己命名（並指定「每案不同」或「公司固定」）。</li>
+          </ul>
+        </li>
+        <li>填範本名稱，按 <span class="btn" style="background:var(--success);border-color:var(--success-dark);color:#fff;font-weight:600;">✔ 建立範本</span>。工具會把範本存進「範本」資料夾，並自動在 Excel 加上需要的欄位。之後這份文件就會跟其他文件一樣出現在清單裡。</li>
+      </ol>
+
+      <h3>移除一種文件範本</h3>
+      <p style="margin-top:0;color:var(--text-2);">
+        在「範本管理」選一份範本，按 <span class="btn danger">🗑 移除選取範本</span>。工具會先列出將刪除的
+        Excel 欄位讓你確認，確定後就刪掉範本並同步移除它專屬的欄位。
+        <br>（只被這份範本用到的欄位才會刪；<b>公司名稱、機關等共用欄位會保留</b>。）
+      </p>
+
+      <div class="note warn"><span class="ic">⚠️</span>
+        <span>新增或移除需要更新 Excel。若 Excel 正開著「標案資料.xlsx」，工具會跳提示「將關閉 Excel」，
+        請先在 Excel 存檔，按確定後工具會自動關閉 Excel 並繼續（若 Excel 詢問是否儲存，依需要選擇即可）。</span>
+      </div>
+    </section>
+
+    <section>
+      <h2>常見問題</h2>
+      <div class="faq">
+        <div class="q">按了沒反應／顯示紅色錯誤？</div>
+        <div class="a">紅色那一列的「訊息」欄會寫原因，最常見是「公司資料」還沒填、或簽署日期格式打錯。修正 Excel、存檔、按 <span class="btn">🔄 重新讀取 Excel</span> 即可。</div>
+        <hr>
+        <div class="q">同一個標案想重做？</div>
+        <div class="a">勾選那一列，勾下方 <b>「重新產生（先清空該標案資料夾再重產）」</b>，再按產生。這會先把該標案的輸出資料夾清空，再產生目前選取的文件——所以之前產生、後來取消勾選的舊檔不會殘留。<br>不勾的話，已經產生過的檔案會被略過、不會覆蓋（只補產生缺少的）。</div>
+        <hr>
+        <div class="q">某個標案要用不同公司投標？</div>
+        <div class="a">在「標案清單」右側的 <b>廠商名稱／負責人姓名／聯絡電話／廠商地址</b> 欄位，個別填入該列要用的值；有填就會優先用你填的，沒填才用「公司資料」的預設值。</div>
+        <hr>
+        <div class="q">可以用不同公司電腦跑嗎？</div>
+        <div class="a">可以，整個資料夾複製過去即可，<b>不需要安裝任何東西</b>。（需要 Windows 10（1903 以上版本）或 Windows 11。）</div>
+        <hr>
+        <div class="q">兩個人同時對同一個標案產生？</div>
+        <div class="a">請避免。若同時產生同一個標案，後存的會蓋掉先存的。</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>重要提醒</h2>
+      <div class="note danger"><span class="ic">⛔</span>
+        <span><b>「範本」資料夾裡的檔案請「不要」用 Word 或 LibreOffice 打開後另存</b>，
+        那會破壞裡面的參數標記，導致之後產生的文件出錯。<br>
+        需要新增／修改文件種類時，請用程式內的「範本管理」功能，或聯絡資訊人員。</span>
+      </div>
+    </section>
+
+    <footer>標案文件產生器 · 免安裝文件產生工具</footer>
+  </div>
+</body>
+</html>
