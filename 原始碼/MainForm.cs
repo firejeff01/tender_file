@@ -21,7 +21,7 @@ namespace TenderDocGen
         string _outputRoot;
 
         DataGridView _grid;
-        Button _btnReload, _btnGenerate, _btnOpenOutput, _btnChangeOutput;
+        Button _btnReload, _btnGenerate, _btnOpenOutput, _btnChangeOutput, _btnAddTemplate;
         CheckBox _chkOverwrite;
         Label _lblStatus;
         TextBox _txtOutput;
@@ -66,11 +66,18 @@ namespace TenderDocGen
             _btnReload.AutoSize = true;
             _btnReload.Padding = new Padding(8, 4, 8, 4);
             _btnReload.Click += delegate { LoadPlan(); };
+            _btnAddTemplate = new Button();
+            _btnAddTemplate.Text = "新增範本…";
+            _btnAddTemplate.AutoSize = true;
+            _btnAddTemplate.Padding = new Padding(8, 4, 8, 4);
+            _btnAddTemplate.Margin = new Padding(10, 3, 0, 3);
+            _btnAddTemplate.Click += delegate { AddTemplate(); };
             Label hint = new Label();
             hint.Text = "在「標案資料.xlsx」填寫標案並存檔後，按此重新讀取。";
             hint.AutoSize = true;
             hint.Margin = new Padding(10, 10, 0, 0);
             top.Controls.Add(_btnReload);
+            top.Controls.Add(_btnAddTemplate);
             top.Controls.Add(hint);
             layout.Controls.Add(top, 0, 0);
 
@@ -188,6 +195,17 @@ namespace TenderDocGen
             col.ReadOnly = true;
             col.SortMode = DataGridViewColumnSortMode.NotSortable;
             return col;
+        }
+
+        // ==================== 新增範本 ====================
+
+        void AddTemplate()
+        {
+            using (AddTemplateForm f = new AddTemplateForm(_baseDir))
+            {
+                if (f.ShowDialog(this) == DialogResult.OK)
+                    LoadPlan();   // 重新掃描範本＋Excel，讓新範本立即出現
+            }
         }
 
         // ==================== 輸出資料夾 ====================

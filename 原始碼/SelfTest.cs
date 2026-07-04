@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace TenderDocGen
@@ -48,6 +49,9 @@ namespace TenderDocGen
                     TestTokensTxtMissing(baseDir, tmpDir);
                     TestLiteralDollarBrace(store, tmpDir);
                     TestPhoneticRuby();
+                    TestTemplateBuilder(tmpDir);
+                    TestXlsxEditor(baseDir, tmpDir);
+                    TestAddTemplateService(baseDir, tmpDir);
                 }
             }
             catch (Exception ex)
@@ -423,6 +427,215 @@ namespace TenderDocGen
                 Check(val == "花蓮縣政府", "rPh 注音不污染 sharedString 儲存格值", "'" + val + "'");
             }
             finally { try { File.Delete(tmp); } catch { } }
+        }
+
+        // ============================== TemplateBuilder：新增範本正規化 ==============================
+        static void TestTemplateBuilder(string tmpDir)
+        {
+            string odtPath = Path.Combine(tmpDir, "raw_template.odt");
+            File.WriteAllBytes(odtPath, BuildColoredOdt());
+
+            TemplateBuilder tb = TemplateBuilder.Load(odtPath);
+            List<ColoredRun> runs = tb.ExtractRuns();
+            Check(runs.Count == 3, "Builder 擷取 3 個彩色 run", runs.Count.ToString());
+            ColoredRun addr = runs.FirstOrDefault(r => r.Text.Contains("中正路"));
+            Check(addr != null && addr.Text == "台北市中正路1號", "Builder 相鄰紅 span 合併成地址",
+                addr != null ? addr.Text : "null");
+            Check(runs.Count(r => r.Category == "red") == 2 && runs.Count(r => r.Category == "blue") == 1,
+                "Builder 紅/藍分類", string.Join(",", runs.Select(r => r.Category)));
+
+            // 對應：公司名→廠商名稱、地址→廠商地址、機關→機關名稱
+            Dictionary<string, string> map = new Dictionary<string, string>();
+            foreach (ColoredRun r in runs)
+            {
+                if (r.Text.Contains("測試公司")) map[r.Id] = "廠商名稱";
+                else if (r.Text.Contains("中正路")) map[r.Id] = "廠商地址";
+                else if (r.Text.Contains("縣政府")) map[r.Id] = "機關名稱";
+            }
+            byte[] built = tb.Build(map);
+            Check(TemplateBuilder.ValidateTemplateBytes(built).Count == 0, "Builder 產出 zip/xml 有效", null);
+
+            // 存成範本 + 重寫 tokens.txt + 用 Generator 端到端產生
+            string tdir = Path.Combine(tmpDir, "builder範本");
+            Directory.CreateDirectory(tdir);
+            File.WriteAllBytes(Path.Combine(tdir, "新範本.odt"), built);
+            TemplateStore.RewriteTokensFile(tdir);
+            TemplateStore store = TemplateStore.Load(tdir);
+            TemplateInfo tpl = store.Templates[0];
+            Check(tpl.Tokens.SetEquals(new HashSet<string> { "廠商名稱", "廠商地址", "機關名稱" }),
+                "Builder 產出 token 集合正確", string.Join(",", tpl.Tokens.OrderBy(x => x)));
+
+            Dictionary<string, string> values = new Dictionary<string, string>
+            {
+                { "廠商名稱", "端到端公司" }, { "廠商地址", "高雄市測試路9號" }, { "機關名稱", "測試縣政府" }
+            };
+            RowPlan rp = new RowPlan();
+            rp.RowNumber = 2; rp.TenderName = "Builder端到端案"; rp.FolderName = "Builder端到端案";
+            rp.Docs.Add(tpl);
+            foreach (KeyValuePair<string, string> kv in values) rp.Values[kv.Key] = kv.Value;
+            RowResult res = Generator.GenerateRow(rp, Path.Combine(tmpDir, "builder輸出"), false, false);
+            Check(res.Errors.Count == 0 && res.Generated.Count == 1, "Builder 範本可被 Generator 產生",
+                string.Join("；", res.Errors));
+            string body = ReadOdtBodyText(Path.Combine(tmpDir, "builder輸出", "Builder端到端案", "新範本.odt"));
+            Check(body.Contains("端到端公司") && body.Contains("高雄市測試路9號") && body.Contains("測試縣政府"),
+                "Builder 範本替換值正確", null);
+            Check(!body.Contains("測試公司股份有限公司"), "Builder 範本無殘留示範文字", null);
+        }
+
+        // ============================== XlsxEditor：加欄/加列 ==============================
+        static void TestXlsxEditor(string baseDir, string tmpDir)
+        {
+            string src = Path.Combine(baseDir, "標案資料.範例.xlsx");
+            if (!File.Exists(src)) src = Path.Combine(baseDir, "標案資料.xlsx");
+            if (!File.Exists(src)) { Log.Add("SKIP XlsxEditor：找不到範例 xlsx"); return; }
+
+            string work = Path.Combine(tmpDir, "editor.xlsx");
+            File.Copy(src, work, true);
+            int before = XlsxReader.Load(work).First(kv => Util.Nfkc(kv.Key) == "標案清單")
+                .Value.Skip(1).Count(r => r.Cells.Any(c => (c ?? "").Trim() != ""));
+
+            XlsxAdditions add = new XlsxAdditions();
+            add.TenderColumns.Add("履約期限");
+            add.TenderColumns.Add("產生:測試新範本");
+            add.DropdownColumns.Add("產生:測試新範本");
+            add.CompanyParams.Add("統一編號");
+            XlsxEditor.Apply(work, add);
+
+            Dictionary<string, List<XlsxRow>> book = XlsxReader.Load(work);
+            List<XlsxRow> tenders = book.First(kv => Util.Nfkc(kv.Key) == "標案清單").Value;
+            List<XlsxRow> company = book.First(kv => Util.Nfkc(kv.Key) == "公司資料").Value;
+            HashSet<string> headers = new HashSet<string>(tenders[0].Cells.Select(c => Util.Nfkc(c)));
+            Check(headers.Contains("履約期限") && headers.Contains("產生:測試新範本"),
+                "XlsxEditor 標案清單新增 2 欄", string.Join("|", headers));
+            HashSet<string> keys = new HashSet<string>(company.Select(r => Util.Nfkc(r.Cell(0))));
+            Check(keys.Contains("統一編號"), "XlsxEditor 公司資料新增列", string.Join("|", keys));
+            int after = tenders.Skip(1).Count(r => r.Cells.Any(c => (c ?? "").Trim() != ""));
+            Check(after == before, "XlsxEditor 既有標案資料列數不變", before + "→" + after);
+            // 既有值仍在
+            Check(tenders.Skip(1).Any(r => r.Cells.Any(c => (c ?? "").Contains("觀光資訊網"))),
+                "XlsxEditor 既有資料內容保留", null);
+        }
+
+        // ============================== AddTemplateService：完整流程（含 Excel 更新） ==============================
+        static void TestAddTemplateService(string baseDir, string tmpDir)
+        {
+            string src = Path.Combine(baseDir, "標案資料.範例.xlsx");
+            if (!File.Exists(src)) src = Path.Combine(baseDir, "標案資料.xlsx");
+            if (!File.Exists(src)) { Log.Add("SKIP AddTemplateService：找不到範例 xlsx"); return; }
+
+            // 建一個獨立的 baseDir：範本\（空）＋ 標案資料.xlsx
+            string svc = Path.Combine(tmpDir, "svc");
+            Directory.CreateDirectory(Path.Combine(svc, "範本"));
+            File.Copy(src, Path.Combine(svc, "標案資料.xlsx"), true);
+            string odt = Path.Combine(tmpDir, "svc_raw.odt");
+            File.WriteAllBytes(odt, BuildColoredOdt());
+
+            TemplateBuilder tb = TemplateBuilder.Load(odt);
+            List<ColoredRun> runs = tb.ExtractRuns();
+            Dictionary<string, string> map = new Dictionary<string, string>();
+            foreach (ColoredRun r in runs)
+            {
+                if (r.Text.Contains("測試公司")) map[r.Id] = "統一編號";   // 全新公司固定參數
+                else if (r.Text.Contains("中正路")) map[r.Id] = "履約地點"; // 全新每案參數
+                else if (r.Text.Contains("縣政府")) map[r.Id] = "機關名稱"; // 沿用既有
+            }
+            Dictionary<string, bool> newType = new Dictionary<string, bool>
+            { { "統一編號", true }, { "履約地點", false } };
+
+            AddTemplateResult res = AddTemplateService.Commit(odt, "服務測試範本", map, newType, svc, false);
+            Check(res.Ok, "Service 建立成功", res.Error);
+            if (!res.Ok) return;
+
+            // 覆寫同名範本：不可產生重複欄（sharedString 表頭去重必須有效）
+            AddTemplateResult res2 = AddTemplateService.Commit(odt, "服務測試範本", map, newType, svc, true);
+            Check(res2.Ok, "Service 覆寫同名成功", res2.Error);
+            List<string> hdr2 = XlsxReader.Load(Path.Combine(svc, "標案資料.xlsx"))
+                .First(kv => Util.Nfkc(kv.Key) == "標案清單").Value[0].Cells.Select(c => Util.Nfkc(c)).ToList();
+            Check(hdr2.Count(h => h == "產生:服務測試範本") == 1, "Service 覆寫不重複加「產生」欄",
+                hdr2.Count(h => h == "產生:服務測試範本").ToString());
+            Check(hdr2.Count(h => h == "履約地點") == 1, "Service 覆寫不重複加參數欄",
+                hdr2.Count(h => h == "履約地點").ToString());
+
+            // 參數名稱含 } 應被拒（否則範本永遠無法產生）
+            Dictionary<string, string> badMap = new Dictionary<string, string>();
+            foreach (ColoredRun r in runs) { badMap[r.Id] = "壞}名"; break; }
+            AddTemplateResult resBad = AddTemplateService.Commit(odt, "壞參數範本", badMap, new Dictionary<string, bool>(), svc, false);
+            Check(!resBad.Ok && resBad.Error.Contains("不允許"), "Service 拒絕含 } 的參數名", resBad.Error);
+
+            Check(File.Exists(Path.Combine(svc, "範本", "服務測試範本.odt")), "Service 範本已存檔", null);
+
+            // Excel：新每案欄、產生欄、公司列
+            Dictionary<string, List<XlsxRow>> book = XlsxReader.Load(Path.Combine(svc, "標案資料.xlsx"));
+            HashSet<string> headers = new HashSet<string>(
+                book.First(kv => Util.Nfkc(kv.Key) == "標案清單").Value[0].Cells.Select(c => Util.Nfkc(c)));
+            Check(headers.Contains("履約地點"), "Service 加了每案欄 履約地點", null);
+            Check(headers.Contains("產生:服務測試範本"), "Service 加了產生欄", null);
+            Check(!headers.Contains("機關名稱") == false, "Service 沿用既有 機關名稱 欄", null);
+            HashSet<string> compKeys = new HashSet<string>(
+                book.First(kv => Util.Nfkc(kv.Key) == "公司資料").Value.Select(r => Util.Nfkc(r.Cell(0))));
+            Check(compKeys.Contains("統一編號"), "Service 加了公司參數 統一編號", null);
+
+            // 端到端：Generator 能用新範本產生（提供三個參數值）
+            TemplateStore store = TemplateStore.Load(Path.Combine(svc, "範本"));
+            TemplateInfo tpl = store.Templates.First(t => t.BaseName == "服務測試範本");
+            RowPlan rp = new RowPlan();
+            rp.RowNumber = 2; rp.TenderName = "Svc端到端"; rp.FolderName = "Svc端到端"; rp.Docs.Add(tpl);
+            rp.Values["統一編號"] = "12345678";
+            rp.Values["履約地點"] = "台中市";
+            rp.Values["機關名稱"] = "端到端縣政府";
+            RowResult gr = Generator.GenerateRow(rp, Path.Combine(tmpDir, "svc輸出"), false, false);
+            Check(gr.Errors.Count == 0 && gr.Generated.Count == 1, "Service 新範本可產生文件",
+                string.Join("；", gr.Errors));
+            string body = ReadOdtBodyText(Path.Combine(tmpDir, "svc輸出", "Svc端到端", "服務測試範本.odt"));
+            Check(body.Contains("12345678") && body.Contains("台中市") && body.Contains("端到端縣政府"),
+                "Service 新範本替換值正確", null);
+        }
+
+        /// <summary>合成一份含紅/藍彩色 span 的最小 ODT（含相鄰多段紅 span 供合併測試）。</summary>
+        static byte[] BuildColoredOdt()
+        {
+            XNamespace o = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
+            XNamespace t = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
+            XNamespace s = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+            XNamespace fo = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
+
+            Func<string, string, XElement> colorStyle = delegate(string name, string hex)
+            {
+                return new XElement(s + "style",
+                    new XAttribute(s + "name", name), new XAttribute(s + "family", "text"),
+                    new XElement(s + "text-properties", new XAttribute(fo + "color", hex)));
+            };
+            Func<string, string, XElement> span = delegate(string style, string text)
+            {
+                return new XElement(t + "span", new XAttribute(t + "style-name", style), text);
+            };
+
+            XDocument doc = new XDocument(new XDeclaration("1.0", "UTF-8", null),
+                new XElement(o + "document-content",
+                    new XElement(o + "automatic-styles",
+                        colorStyle("C_RED", "#FF0000"),
+                        colorStyle("C_BLUE", "#0070C0")),
+                    new XElement(o + "body",
+                        new XElement(o + "text",
+                            new XElement(t + "p",
+                                span("C_RED", "測試公司股份有限公司"),
+                                "（廠商名稱）地址：",
+                                span("C_RED", "台北市中正路"), span("C_RED", "1"), span("C_RED", "號"),
+                                "，委派至", span("C_BLUE", "某某縣政府"), "辦理。")))));
+
+            byte[] content;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                XmlWriterSettings set = new XmlWriterSettings();
+                set.Encoding = new UTF8Encoding(false); set.Indent = false;
+                using (XmlWriter xw = XmlWriter.Create(ms, set)) { doc.Save(xw); }
+                content = ms.ToArray();
+            }
+            List<KeyValuePair<string, byte[]>> entries = new List<KeyValuePair<string, byte[]>>();
+            entries.Add(new KeyValuePair<string, byte[]>("mimetype",
+                Encoding.ASCII.GetBytes("application/vnd.oasis.opendocument.text")));
+            entries.Add(new KeyValuePair<string, byte[]>("content.xml", content));
+            return OdtWriter.Repack(entries);
         }
 
         // ============================== 工具 ==============================

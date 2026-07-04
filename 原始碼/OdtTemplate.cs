@@ -81,22 +81,49 @@ namespace TenderDocGen
                 foreach (string k in t.ExpectedTokenCounts.Keys) set.Add(k);
             return set;
         }
+
+        /// <summary>
+        /// 掃描範本資料夾內所有 .odt，重新產生 tokens.txt（每行「檔名|token|次數」）。
+        /// 新增／更新範本後呼叫，讓 manifest 與實際範本一致、避免漂移。
+        /// </summary>
+        public static void RewriteTokensFile(string templateDir)
+        {
+            List<string> lines = new List<string>();
+            foreach (string path in Directory.GetFiles(templateDir, "*.odt").OrderBy(p => p))
+            {
+                string fileName = Path.GetFileName(path);
+                if (fileName.StartsWith("~") || fileName.StartsWith(".")) continue;
+                Dictionary<string, int> counts;
+                try { counts = OdtWriter.ExtractTokenCounts(path); }
+                catch { continue; }   // 無法解析的檔案跳過，不讓它擋住 manifest 重寫
+                foreach (KeyValuePair<string, int> kv in counts.OrderBy(k => k.Key))
+                    lines.Add(fileName + "|" + kv.Key + "|" + kv.Value);
+            }
+            File.WriteAllLines(Path.Combine(templateDir, "tokens.txt"), lines, new UTF8Encoding(true));
+        }
     }
 
     /// <summary>ODT 參數替換與確定性重打包。</summary>
     static class OdtWriter
     {
-        static readonly XNamespace NsText = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
-        static readonly XNamespace NsStyle = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
-        static readonly XNamespace NsFo = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
-        const string ParamStylePrefix = "PARAM.";
+        // 供 TemplateBuilder 等重用（正規化新範本時共用相同的命名空間與慣例）
+        internal static readonly XNamespace NsText = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
+        internal static readonly XNamespace NsStyle = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+        internal static readonly XNamespace NsFo = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
+        internal const string ParamStylePrefix = "PARAM.";
         static readonly System.Text.RegularExpressions.Regex TokenRegex =
             new System.Text.RegularExpressions.Regex(@"^\$\{([^}]+)\}$");
 
         /// <summary>掃描範本 content.xml，回傳所有 PARAM span 內的 token 名稱（去重）。</summary>
         public static HashSet<string> ExtractTokens(string odtPath)
         {
-            HashSet<string> tokens = new HashSet<string>();
+            return new HashSet<string>(ExtractTokenCounts(odtPath).Keys);
+        }
+
+        /// <summary>掃描範本 content.xml，回傳每個 token 的出現次數（給 tokens.txt 與竄改預檢用）。</summary>
+        public static Dictionary<string, int> ExtractTokenCounts(string odtPath)
+        {
+            Dictionary<string, int> counts = new Dictionary<string, int>();
             List<KeyValuePair<string, byte[]>> entries = ReadAllEntries(odtPath);
             int idx = entries.FindIndex(e => e.Key == "content.xml");
             if (idx < 0) throw new InvalidDataException("缺少 content.xml，不是有效的 ODT。");
@@ -107,9 +134,13 @@ namespace TenderDocGen
                 XAttribute sn = span.Attribute(NsText + "style-name");
                 if (sn == null || !sn.Value.StartsWith(ParamStylePrefix)) continue;
                 System.Text.RegularExpressions.Match m = TokenRegex.Match(span.Value);
-                if (m.Success) tokens.Add(m.Groups[1].Value);
+                if (m.Success)
+                {
+                    string tk = m.Groups[1].Value;
+                    counts[tk] = (counts.ContainsKey(tk) ? counts[tk] : 0) + 1;
+                }
             }
-            return tokens;
+            return counts;
         }
 
         /// <summary>
@@ -430,7 +461,7 @@ namespace TenderDocGen
             return crc ^ 0xFFFFFFFF;
         }
 
-        static byte[] StripBom(byte[] bytes)
+        internal static byte[] StripBom(byte[] bytes)
         {
             if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
             {

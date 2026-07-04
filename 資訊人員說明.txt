@@ -33,9 +33,20 @@ Windows 11 內建元件。因此本工具刻意做到「零安裝、零外部相
 ────────────────────────────────────────────────────────────────────
   Program.cs      進入點。一般開 GUI；引數 /selftest 跑自我測試。
                   含全域未處理例外攔截（顯示可讀對話框而非崩潰視窗）。
-  MainForm.cs     WinForms 主視窗（清單、勾選、產生、結果回報、輸出資料夾設定）。
+  MainForm.cs     WinForms 主視窗（清單、勾選、產生、結果回報、輸出資料夾設定、新增範本）。
   Settings.cs     可攜式設定讀寫（exe 旁「設定.txt」，key=value，UTF-8）。
                   目前只存「輸出資料夾」；刪掉設定.txt 即還原預設（exe 旁的「輸出」）。
+  TemplateBuilder.cs 「新增範本」核心：解析任意 ODT、擷取彩色 span（非黑色 fo:color）、
+                  相鄰同色 span 合併、套用參數對應→掛 PARAM.* 樣式→重用 OdtWriter.Repack。
+  XlsxEditor.cs   純 zip+XML 對既有 標案資料.xlsx 加欄（標案清單 ListObject 表格）／加列
+                  （公司資料）。備份→暫存→重讀驗證→取代，失敗還原，不依賴 Office。
+  AddTemplateService.cs 「新增範本」無 UI 流程（Commit）：正規化→更新 Excel→存範本→重寫 tokens.txt。
+  AddTemplateForm.cs 「新增範本」對話框（對應表、智慧預填、新增參數）。
+
+  「新增範本」與原本 工具\normalize.ps1 的關係：normalize.ps1 是最初一次性把 3 份範本
+  正規化（示範文字寫死）；TemplateBuilder 是它的通用化 in-app 版本，改以「使用者對應
+  彩色片段」辨識參數，替換/打包規則完全相同。日後新範本一律走「新增範本」按鈕即可，
+  不需再跑 normalize.ps1。
   XlsxReader.cs   純 zip+XML 的 xlsx 讀取器（不依賴 Office）。
   OdtTemplate.cs  範本載入、參數替換、確定性 zip 重打包（見下）。
   Generator.cs    Excel→產生計畫、資料夾名清理、逐列產生。
