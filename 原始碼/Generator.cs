@@ -238,6 +238,7 @@ namespace TenderDocGen
             }
 
             string folder = Path.Combine(outputRoot, rp.FolderName);
+            bool existed = Directory.Exists(folder);
             try
             {
                 Directory.CreateDirectory(folder);
@@ -246,6 +247,17 @@ namespace TenderDocGen
             {
                 result.Errors.Add("無法建立資料夾「" + folder + "」：" + ex.Message);
                 return result;
+            }
+
+            // 重新產生：先清空該標案資料夾，讓產出恰好對應目前選取的文件
+            //（避免之前產生、後來取消勾選的舊檔殘留）。鎖住而刪不掉的檔於最後檢查回報。
+            if (overwrite && existed)
+            {
+                foreach (string old in Directory.GetFiles(folder))
+                {
+                    try { File.Delete(old); }
+                    catch { /* 被鎖住的檔留待產生流程或最後的殘留檢查處理 */ }
+                }
             }
 
             foreach (TemplateInfo tpl in rp.Docs)
@@ -297,6 +309,19 @@ namespace TenderDocGen
                     // 不論成功失敗都清掉殘留的暫存檔（例如覆寫時目標被鎖住）
                     try { if (File.Exists(tmpPath)) File.Delete(tmpPath); }
                     catch { /* 暫存檔清不掉不影響結果，忽略 */ }
+                }
+            }
+
+            // 重新產生後，檢查是否還有「非本次應產生」的殘留舊檔（清空時被鎖住而未刪除）
+            if (overwrite && existed)
+            {
+                HashSet<string> expected = new HashSet<string>();
+                foreach (TemplateInfo t in rp.Docs) expected.Add(t.FileName);
+                foreach (string leftover in Directory.GetFiles(folder))
+                {
+                    string nm = Path.GetFileName(leftover);
+                    if (!expected.Contains(nm))
+                        result.Errors.Add("舊檔「" + nm + "」未能清除（可能正被開啟中），請關閉後再重新產生。");
                 }
             }
             return result;

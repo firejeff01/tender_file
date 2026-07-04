@@ -94,7 +94,7 @@ namespace TenderDocGen
             UiTheme.StylePrimary(_btnGenerate);
             _btnGenerate.Click += delegate { GenerateChecked(); };
             _chkOverwrite = new CheckBox();
-            _chkOverwrite.Text = "重新產生（覆寫已存在的檔案）"; _chkOverwrite.AutoSize = true;
+            _chkOverwrite.Text = "重新產生（先清空該標案資料夾再重產）"; _chkOverwrite.AutoSize = true;
             _chkOverwrite.ForeColor = UiTheme.TextPrimary; _chkOverwrite.Anchor = AnchorStyles.Left;
             _chkOverwrite.Margin = new Padding(18, 0, 0, 0);
             _btnOpenOutput = new Button();

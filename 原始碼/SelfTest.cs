@@ -49,6 +49,7 @@ namespace TenderDocGen
                     TestTokensTxtMissing(baseDir, tmpDir);
                     TestLiteralDollarBrace(store, tmpDir);
                     TestPhoneticRuby();
+                    TestRegenerateClearsFolder(store, tmpDir);
                     TestTemplateBuilder(tmpDir);
                     TestXlsxEditor(baseDir, tmpDir);
                     TestXlsxInsertPositionAndRemove(baseDir, tmpDir);
@@ -517,6 +518,46 @@ namespace TenderDocGen
             // 既有值仍在
             Check(tenders.Skip(1).Any(r => r.Cells.Any(c => (c ?? "").Contains("觀光資訊網"))),
                 "XlsxEditor 既有資料內容保留", null);
+        }
+
+        // ============================== 重新產生：先清空資料夾 ==============================
+        static void TestRegenerateClearsFolder(TemplateStore store, string tmpDir)
+        {
+            string outRoot = Path.Combine(tmpDir, "regen輸出");
+            TemplateInfo t1 = store.Templates.First(t => t.BaseName == "保密切結書");
+            TemplateInfo t2 = store.Templates.First(t => t.BaseName == "保密同意書");
+            Dictionary<string, string> vals = new Dictionary<string, string>
+            {
+                { "廠商名稱", "甲公司" }, { "負責人姓名", "乙" }, { "聯絡電話", "12345" }, { "廠商地址", "丙路1號" },
+                { "機關名稱", "丁機關" }, { "案件名稱", "戊案" }, { "簽署年", "115" }, { "簽署月", "1" }, { "簽署日", "1" }
+            };
+            string folder = Path.Combine(outRoot, "清空測試");
+
+            // 先產生 2 份文件
+            RowPlan rp2 = new RowPlan();
+            rp2.RowNumber = 2; rp2.TenderName = "清空測試"; rp2.FolderName = "清空測試";
+            rp2.Docs.Add(t1); rp2.Docs.Add(t2);
+            foreach (KeyValuePair<string, string> kv in vals) rp2.Values[kv.Key] = kv.Value;
+            Generator.GenerateRow(rp2, outRoot, false, false);
+            Check(File.Exists(Path.Combine(folder, t1.FileName)) && File.Exists(Path.Combine(folder, t2.FileName)),
+                "重產前置：先產生 2 檔", null);
+
+            // 改成只選 1 份，用「重新產生（overwrite）」→ 另一份舊檔應被清掉
+            RowPlan rp1 = new RowPlan();
+            rp1.RowNumber = 2; rp1.TenderName = "清空測試"; rp1.FolderName = "清空測試";
+            rp1.Docs.Add(t1);
+            foreach (KeyValuePair<string, string> kv in vals) rp1.Values[kv.Key] = kv.Value;
+            RowResult r = Generator.GenerateRow(rp1, outRoot, true, false);
+            Check(r.Errors.Count == 0 && File.Exists(Path.Combine(folder, t1.FileName))
+                && !File.Exists(Path.Combine(folder, t2.FileName)),
+                "重新產生：清空後只剩目前選取的文件（舊檔已移除）", string.Join(";", r.Errors));
+            Check(Directory.GetFiles(folder, "*.odt").Length == 1, "重新產生：資料夾內恰 1 個 odt",
+                Directory.GetFiles(folder, "*.odt").Length.ToString());
+
+            // 對照：不勾 overwrite 時不清空（既有檔保留、只補缺）
+            RowResult r2 = Generator.GenerateRow(rp2, outRoot, false, false);
+            Check(r2.Skipped.Contains(t1.FileName) && File.Exists(Path.Combine(folder, t2.FileName)),
+                "非重新產生：不清空、既有略過只補缺", "skipped=" + string.Join(",", r2.Skipped));
         }
 
         // ============================== XlsxEditor：插入位置 + 移除 ==============================
