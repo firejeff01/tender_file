@@ -288,6 +288,9 @@ namespace TenderDocGen
                 overwrite = true;
             }
 
+            // 需要更新 Excel → 先確保 Excel 已關閉
+            if (!ExcelGuard.EnsureClosed(AddTemplateService.XlsxPath(_baseDir), this)) return;
+
             Cursor = Cursors.WaitCursor;
             _btnOk.Enabled = false;
             AddTemplateResult res;

@@ -51,7 +51,10 @@ namespace TenderDocGen
                     TestPhoneticRuby();
                     TestTemplateBuilder(tmpDir);
                     TestXlsxEditor(baseDir, tmpDir);
+                    TestXlsxInsertPositionAndRemove(baseDir, tmpDir);
+                    TestValidationShrinkOnRemove(baseDir, tmpDir);
                     TestAddTemplateService(baseDir, tmpDir);
+                    TestRemoveTemplateService(baseDir, tmpDir);
                 }
             }
             catch (Exception ex)
@@ -514,6 +517,188 @@ namespace TenderDocGen
             // 既有值仍在
             Check(tenders.Skip(1).Any(r => r.Cells.Any(c => (c ?? "").Contains("觀光資訊網"))),
                 "XlsxEditor 既有資料內容保留", null);
+        }
+
+        // ============================== XlsxEditor：插入位置 + 移除 ==============================
+        static void TestXlsxInsertPositionAndRemove(string baseDir, string tmpDir)
+        {
+            string src = Path.Combine(baseDir, "標案資料.範例.xlsx");
+            if (!File.Exists(src)) src = Path.Combine(baseDir, "標案資料.xlsx");
+            if (!File.Exists(src)) { Log.Add("SKIP 插入/移除：找不到範例 xlsx"); return; }
+
+            string work = Path.Combine(tmpDir, "insrem.xlsx");
+            File.Copy(src, work, true);
+            List<string> orig = TenderHeaders(work);
+            int before = TenderDataRowCount(work);
+
+            // 插入：產生欄 + 一個每案參數欄（服務層順序：產生欄先）
+            XlsxAdditions add = new XlsxAdditions();
+            add.TenderColumns.Add("產生:新範本A");
+            add.DropdownColumns.Add("產生:新範本A");
+            add.TenderColumns.Add("履約地點");
+            XlsxEditor.Apply(work, add);
+
+            List<string> h = TenderHeaders(work);
+            int iGenLast = h.FindIndex(x => x == "產生:保密同意書");
+            int iNewGen = h.FindIndex(x => x == "產生:新範本A");
+            int iLoc = h.FindIndex(x => x == "履約地點");
+            int iNote = h.FindIndex(x => x == "備註");
+            Check(iNewGen == iGenLast + 1, "插入：產生欄緊接最後一個產生欄（群組連續）",
+                "產生:保密同意書@" + iGenLast + " 新產生@" + iNewGen);
+            Check(iLoc == iNewGen + 1 && iNote == iLoc + 1, "插入：參數欄接在產生欄後、在備註之前",
+                "新產生@" + iNewGen + " 履約@" + iLoc + " 備註@" + iNote);
+            // ListObject 的 tableColumn 順序必須與表頭一致（否則 Excel 跳修復）
+            List<string> tcols = TableColumnNames(work);
+            Check(tcols.SequenceEqual(h), "插入：tableColumn 順序與表頭一致",
+                "table=[" + string.Join(",", tcols) + "]");
+            Check(TenderDataRowCount(work) == before, "插入：既有資料列數不變", null);
+            Check(CompanyKeysOf(work).Contains("履約地點") == false, "插入：每案欄不誤入公司資料", null);
+
+            // 連續再插一個 → 產生欄仍連續
+            XlsxAdditions add2 = new XlsxAdditions();
+            add2.TenderColumns.Add("產生:新範本B");
+            add2.DropdownColumns.Add("產生:新範本B");
+            XlsxEditor.Apply(work, add2);
+            List<string> h2 = TenderHeaders(work);
+            int a = h2.FindIndex(x => x == "產生:新範本A");
+            int b = h2.FindIndex(x => x == "產生:新範本B");
+            Check(b == a + 1, "連續插入：產生欄群組仍連續", "A@" + a + " B@" + b);
+
+            // 移除「新範本A」的欄 + 一個每案參數欄
+            XlsxRemovals rem = new XlsxRemovals();
+            rem.TenderColumns.Add("產生:新範本A");
+            rem.TenderColumns.Add("履約地點");
+            XlsxEditor.Remove(work, rem);
+            List<string> h3 = TenderHeaders(work);
+            Check(!h3.Contains("產生:新範本A") && !h3.Contains("履約地點"), "移除：欄位已消失", string.Join("|", h3));
+            Check(h3.Contains("產生:新範本B") && h3.Contains("備註") && h3.Contains("廠商地址"),
+                "移除：其他欄位保留", null);
+            Check(TenderDataRowCount(work) == before, "移除：既有資料列數不變", null);
+
+            // 全部移回原狀
+            XlsxRemovals rem2 = new XlsxRemovals();
+            rem2.TenderColumns.Add("產生:新範本B");
+            XlsxEditor.Remove(work, rem2);
+            List<string> h4 = TenderHeaders(work);
+            Check(h4.Count == orig.Count && h4.SequenceEqual(orig), "移除：回復與原始相同欄序",
+                "orig=" + orig.Count + " now=" + h4.Count);
+        }
+
+        static void TestRemoveTemplateService(string baseDir, string tmpDir)
+        {
+            string src = Path.Combine(baseDir, "標案資料.範例.xlsx");
+            if (!File.Exists(src)) src = Path.Combine(baseDir, "標案資料.xlsx");
+            if (!File.Exists(src)) { Log.Add("SKIP 移除範本：找不到範例 xlsx"); return; }
+
+            string svc = Path.Combine(tmpDir, "svcrem");
+            Directory.CreateDirectory(Path.Combine(svc, "範本"));
+            File.Copy(src, Path.Combine(svc, "標案資料.xlsx"), true);
+            // 先放兩份真實範本＋新增一份含獨有參數的
+            File.Copy(Path.Combine(baseDir, "範本", "保密切結書.odt"), Path.Combine(svc, "範本", "保密切結書.odt"));
+            File.Copy(Path.Combine(baseDir, "範本", "保密同意書.odt"), Path.Combine(svc, "範本", "保密同意書.odt"));
+            string odt = Path.Combine(tmpDir, "svcrem_raw.odt");
+            File.WriteAllBytes(odt, BuildColoredOdt());
+            TemplateBuilder tb = TemplateBuilder.Load(odt);
+            Dictionary<string, string> map = new Dictionary<string, string>();
+            foreach (ColoredRun r in tb.ExtractRuns())
+            {
+                if (r.Text.Contains("測試公司")) map[r.Id] = "統編A";     // 全新「公司固定」參數
+                else if (r.Text.Contains("中正路")) map[r.Id] = "獨有地點"; // 全新「每案」參數
+                else if (r.Text.Contains("縣政府")) map[r.Id] = "機關名稱"; // 共用（既有）
+            }
+            AddTemplateResult addRes = AddTemplateService.Commit(odt, "待移除範本", map,
+                new Dictionary<string, bool> { { "統編A", true }, { "獨有地點", false } }, svc, false);
+            Check(addRes.Ok, "移除前：先建立成功", addRes.Error);
+            Check(CompanyKeysOf(Path.Combine(svc, "標案資料.xlsx")).Contains("統編A"),
+                "移除前：公司固定參數已入公司資料", null);
+
+            // 預覽移除：獨有每案欄→標案清單、公司固定參數→公司資料、共用不列
+            RemovalPlan prev = AddTemplateService.PreviewRemoval("待移除範本", svc);
+            Check(prev.Error == null && prev.TenderColumns.Contains("產生:待移除範本")
+                && prev.TenderColumns.Contains("獨有地點")
+                && prev.CompanyParams.Contains("統編A")
+                && !prev.TenderColumns.Contains("機關名稱"),
+                "移除預覽：獨有每案欄+公司參數正確分類（共用不列）",
+                "tender=" + string.Join(",", prev.TenderColumns) + " company=" + string.Join(",", prev.CompanyParams));
+
+            RemovalPlan rres = AddTemplateService.RemoveTemplate("待移除範本", svc);
+            Check(rres.Ok, "移除範本成功", rres.Error);
+            Check(!File.Exists(Path.Combine(svc, "範本", "待移除範本.odt")), "移除：範本檔已刪", null);
+            List<string> hdr = TenderHeaders(Path.Combine(svc, "標案資料.xlsx"));
+            Check(!hdr.Contains("產生:待移除範本") && !hdr.Contains("獨有地點"), "移除：標案清單欄已消失", null);
+            Check(!CompanyKeysOf(Path.Combine(svc, "標案資料.xlsx")).Contains("統編A"),
+                "移除：公司資料獨有參數列已消失（不再遺留）", null);
+            Check(hdr.Contains("機關名稱"), "移除：共用欄保留", null);
+        }
+
+        // 移除「最後一個產生欄」後，是/否 驗證範圍要縮小、不可蔓延到備註欄
+        static void TestValidationShrinkOnRemove(string baseDir, string tmpDir)
+        {
+            string src = Path.Combine(baseDir, "標案資料.範例.xlsx");
+            if (!File.Exists(src)) src = Path.Combine(baseDir, "標案資料.xlsx");
+            if (!File.Exists(src)) { Log.Add("SKIP 驗證縮範圍：找不到範例 xlsx"); return; }
+            string work = Path.Combine(tmpDir, "valshrink.xlsx");
+            File.Copy(src, work, true);
+
+            XlsxRemovals rem = new XlsxRemovals();
+            rem.TenderColumns.Add("產生:保密同意書");   // 最後一個產生欄（G）
+            XlsxEditor.Remove(work, rem);
+
+            List<string> sqrefs = TenderValidationSqrefs(work);
+            string all = string.Join(" ", sqrefs);
+            Check(all.Contains("E2:F4") && !all.Contains("G"),
+                "移除末產生欄：是/否驗證縮為 E2:F4（未蔓延到備註）", "sqref=" + all);
+        }
+
+        static List<string> TenderHeaders(string xlsxPath)
+        {
+            return XlsxReader.Load(xlsxPath).First(kv => Util.Nfkc(kv.Key) == "標案清單")
+                .Value[0].Cells.Select(c => Util.Nfkc(c)).ToList();
+        }
+        // 讀 xl/tables/table1.xml 的 tableColumn name（依序），驗證與表頭一致。
+        static List<string> TableColumnNames(string xlsxPath)
+        {
+            using (FileStream fs = new FileStream(xlsxPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (ZipArchive zip = new ZipArchive(fs, ZipArchiveMode.Read))
+            {
+                ZipArchiveEntry e = zip.Entries.FirstOrDefault(x => x.FullName.StartsWith("xl/tables/") && x.FullName.EndsWith(".xml"));
+                if (e == null) return new List<string>();
+                using (Stream s = e.Open())
+                {
+                    XDocument d = XDocument.Load(s);
+                    return d.Descendants().Where(x => x.Name.LocalName == "tableColumn")
+                        .Select(x => Util.Nfkc((string)x.Attribute("name"))).ToList();
+                }
+            }
+        }
+        static HashSet<string> CompanyKeysOf(string xlsxPath)
+        {
+            return new HashSet<string>(XlsxReader.Load(xlsxPath).First(kv => Util.Nfkc(kv.Key) == "公司資料")
+                .Value.Select(r => Util.Nfkc(r.Cell(0))));
+        }
+        static int TenderDataRowCount(string xlsxPath)
+        {
+            return XlsxReader.Load(xlsxPath).First(kv => Util.Nfkc(kv.Key) == "標案清單")
+                .Value.Skip(1).Count(r => r.Cells.Any(c => (c ?? "").Trim() != ""));
+        }
+        // 讀標案清單 worksheet 的 dataValidation sqref（找含 sheetData 且有 dataValidation 的工作表）
+        static List<string> TenderValidationSqrefs(string xlsxPath)
+        {
+            using (FileStream fs = new FileStream(xlsxPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (ZipArchive zip = new ZipArchive(fs, ZipArchiveMode.Read))
+            {
+                foreach (ZipArchiveEntry e in zip.Entries.Where(x => x.FullName.StartsWith("xl/worksheets/") && x.FullName.EndsWith(".xml")))
+                {
+                    using (Stream s = e.Open())
+                    {
+                        XDocument d = XDocument.Load(s);
+                        List<string> sq = d.Descendants().Where(x => x.Name.LocalName == "dataValidation")
+                            .Select(x => (string)x.Attribute("sqref")).Where(v => v != null).ToList();
+                        if (sq.Count > 0) return sq;
+                    }
+                }
+            }
+            return new List<string>();
         }
 
         // ============================== AddTemplateService：完整流程（含 Excel 更新） ==============================

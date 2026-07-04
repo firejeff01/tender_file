@@ -40,8 +40,14 @@ Windows 11 內建元件。因此本工具刻意做到「零安裝、零外部相
                   相鄰同色 span 合併、套用參數對應→掛 PARAM.* 樣式→重用 OdtWriter.Repack。
   XlsxEditor.cs   純 zip+XML 對既有 標案資料.xlsx 加欄（標案清單 ListObject 表格）／加列
                   （公司資料）。備份→暫存→重讀驗證→取代，失敗還原，不依賴 Office。
-  AddTemplateService.cs 「新增範本」無 UI 流程（Commit）：正規化→更新 Excel→存範本→重寫 tokens.txt。
+  AddTemplateService.cs 範本新增/移除的無 UI 流程：Commit（正規化→更新 Excel→存範本→重寫 tokens.txt）、
+                  PreviewRemoval/RemoveTemplate（算獨有參數→移 Excel 欄列→刪 odt）。
   AddTemplateForm.cs 「新增範本」對話框（對應表、智慧預填、新增參數）。
+  TemplateManagerForm.cs 「範本管理」對話框（列出範本、新增、移除）。
+  ExcelGuard.cs   更新 Excel 前確保檔案未被 Excel 佔用；溫和關閉（CloseMainWindow）＋輪詢釋出，不強殺。
+
+  XlsxEditor 的加欄採「插入到最後一個『產生:』欄之後」（保持產生欄群組連續），需搬移儲存格
+  參照、tableColumns 序位、dataValidation sqref；移除為其反向操作。皆有 Excel COM 實測不跳修復。
 
   「新增範本」與原本 工具\normalize.ps1 的關係：normalize.ps1 是最初一次性把 3 份範本
   正規化（示範文字寫死）；TemplateBuilder 是它的通用化 in-app 版本，改以「使用者對應

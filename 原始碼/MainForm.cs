@@ -67,11 +67,11 @@ namespace TenderDocGen
             _btnReload.Padding = new Padding(8, 4, 8, 4);
             _btnReload.Click += delegate { LoadPlan(); };
             _btnAddTemplate = new Button();
-            _btnAddTemplate.Text = "新增範本…";
+            _btnAddTemplate.Text = "範本管理…";
             _btnAddTemplate.AutoSize = true;
             _btnAddTemplate.Padding = new Padding(8, 4, 8, 4);
             _btnAddTemplate.Margin = new Padding(10, 3, 0, 3);
-            _btnAddTemplate.Click += delegate { AddTemplate(); };
+            _btnAddTemplate.Click += delegate { ManageTemplates(); };
             Label hint = new Label();
             hint.Text = "在「標案資料.xlsx」填寫標案並存檔後，按此重新讀取。";
             hint.AutoSize = true;
@@ -197,14 +197,14 @@ namespace TenderDocGen
             return col;
         }
 
-        // ==================== 新增範本 ====================
+        // ==================== 範本管理 ====================
 
-        void AddTemplate()
+        void ManageTemplates()
         {
-            using (AddTemplateForm f = new AddTemplateForm(_baseDir))
+            using (TemplateManagerForm f = new TemplateManagerForm(_baseDir))
             {
-                if (f.ShowDialog(this) == DialogResult.OK)
-                    LoadPlan();   // 重新掃描範本＋Excel，讓新範本立即出現
+                f.ShowDialog(this);
+                if (f.Changed) LoadPlan();   // 範本有增減 → 重新掃描範本＋Excel
             }
         }
 
