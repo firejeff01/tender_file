@@ -38,10 +38,9 @@ namespace TenderDocGen
 
             Text = "標案文件產生器";
             UiTheme.StyleForm(this);
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.None;   // 尺寸自行依 DPI 縮放，避免 Font 模式二次縮放
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(1280, 800);
-            MinimumSize = new Size(1040, 640);
+            UiTheme.SizeWindow(this, 1280, 800, 1040, 640);
 
             // 純 Docking（AutoSize，隨字型/DPI 縮放）。加入順序：grid→footer→output→header
             // （最後加入者為最外層 Top，故 header 在最上、output 次之）。

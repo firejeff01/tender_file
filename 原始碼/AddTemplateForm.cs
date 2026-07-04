@@ -36,10 +36,9 @@ namespace TenderDocGen
 
             Text = "新增範本";
             UiTheme.StyleForm(this);
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.None;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(1060, 740);
-            MinimumSize = new Size(820, 560);
+            UiTheme.SizeWindow(this, 1060, 740, 820, 560);
 
             TableLayoutPanel layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;

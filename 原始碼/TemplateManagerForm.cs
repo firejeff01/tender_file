@@ -22,10 +22,9 @@ namespace TenderDocGen
             _baseDir = baseDir;
             Text = "範本管理";
             UiTheme.StyleForm(this);
-            AutoScaleMode = AutoScaleMode.Font;
+            AutoScaleMode = AutoScaleMode.None;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(1000, 660);
-            MinimumSize = new Size(760, 480);
+            UiTheme.SizeWindow(this, 1000, 660, 760, 480);
 
             // ===== 清單（Fill）=====
             _grid = new DataGridView();

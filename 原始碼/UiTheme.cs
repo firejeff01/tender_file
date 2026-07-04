@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace TenderDocGen
@@ -48,6 +49,38 @@ namespace TenderDocGen
             f.BackColor = BgMain;
             f.ForeColor = TextPrimary;
             f.Font = Font(12f);
+        }
+
+        /// <summary>
+        /// 以「邏輯尺寸」（96 DPI 基準）設定視窗大小，並依實際螢幕 DPI 放大，
+        /// 讓高 DPI 螢幕上的視窗與 WPF 的 DIP 尺寸一致（例如 1280 在 200% 螢幕 → 2560 實體像素）。
+        /// 會夾在主螢幕工作區內，避免超出畫面。
+        /// </summary>
+        [DllImport("user32.dll")] static extern IntPtr GetDC(IntPtr hWnd);
+        [DllImport("gdi32.dll")] static extern int GetDeviceCaps(IntPtr hdc, int index);
+        [DllImport("user32.dll")] static extern int ReleaseDC(IntPtr hWnd, IntPtr hdc);
+
+        /// <summary>系統 DPI（96=100%）。可在視窗 handle 建立前取得，故建構式即可用。</summary>
+        public static int SystemDpi()
+        {
+            IntPtr dc = GetDC(IntPtr.Zero);
+            if (dc == IntPtr.Zero) return 96;
+            int dpi = GetDeviceCaps(dc, 88);   // LOGPIXELSX
+            ReleaseDC(IntPtr.Zero, dc);
+            return dpi <= 0 ? 96 : dpi;
+        }
+
+        public static void SizeWindow(Form f, int w, int h, int minW, int minH)
+        {
+            float s = SystemDpi() / 96f;
+            if (s < 1f) s = 1f;
+            Rectangle wa = Screen.PrimaryScreen.WorkingArea;
+            int cw = Math.Min((int)(w * s), wa.Width - (int)(16 * s));
+            int ch = Math.Min((int)(h * s), wa.Height - (int)(24 * s));
+            int mw = Math.Min((int)(minW * s), cw);
+            int mh = Math.Min((int)(minH * s), ch + 40);
+            f.MinimumSize = new Size(mw, mh);
+            f.ClientSize = new Size(cw, ch);
         }
 
         // ==================== 按鈕 ====================
@@ -190,8 +223,7 @@ namespace TenderDocGen
             head.SelectionBackColor = BgAccent;
             head.SelectionForeColor = TextPrimary;
             head.Padding = new Padding(6, 8, 6, 8);
-            g.ColumnHeadersHeight = 44;
-            g.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            g.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
 
             DataGridViewCellStyle cell = g.DefaultCellStyle;
             cell.BackColor = BgCard;
