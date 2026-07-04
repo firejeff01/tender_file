@@ -37,102 +37,29 @@ namespace TenderDocGen
             InitOutputRoot();
 
             Text = "標案文件產生器";
-            // 加大字級提升可讀性；AutoScaleMode=Font 會讓整個介面等比放大
-            Font = new Font("Microsoft JhengHei UI", 12f);
+            UiTheme.StyleForm(this);
             AutoScaleMode = AutoScaleMode.Font;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(1180, 720);
-            MinimumSize = new Size(900, 560);
+            ClientSize = new Size(1280, 800);
+            MinimumSize = new Size(1040, 640);
 
-            TableLayoutPanel layout = new TableLayoutPanel();
-            layout.Dock = DockStyle.Fill;
-            layout.ColumnCount = 1;
-            layout.RowCount = 4;
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // 說明＋重新讀取
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // 輸出資料夾設定
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // 清單
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));   // 操作列
-            layout.Padding = new Padding(12);
-            Controls.Add(layout);
+            // 純 Docking（AutoSize，隨字型/DPI 縮放）。加入順序：grid→footer→output→header
+            // （最後加入者為最外層 Top，故 header 在最上、output 次之）。
 
-            // --- 第 0 列：說明與重新讀取 ---
-            FlowLayoutPanel top = new FlowLayoutPanel();
-            top.Dock = DockStyle.Fill;
-            top.AutoSize = true;
-            top.WrapContents = true;
-            top.Margin = new Padding(0, 0, 0, 6);
-            _btnReload = new Button();
-            _btnReload.Text = "重新讀取 Excel";
-            _btnReload.AutoSize = true;
-            _btnReload.Padding = new Padding(8, 4, 8, 4);
-            _btnReload.Click += delegate { LoadPlan(); };
-            _btnAddTemplate = new Button();
-            _btnAddTemplate.Text = "範本管理…";
-            _btnAddTemplate.AutoSize = true;
-            _btnAddTemplate.Padding = new Padding(8, 4, 8, 4);
-            _btnAddTemplate.Margin = new Padding(10, 3, 0, 3);
-            _btnAddTemplate.Click += delegate { ManageTemplates(); };
-            Label hint = new Label();
-            hint.Text = "在「標案資料.xlsx」填寫標案並存檔後，按此重新讀取。";
-            hint.AutoSize = true;
-            hint.Margin = new Padding(10, 10, 0, 0);
-            top.Controls.Add(_btnReload);
-            top.Controls.Add(_btnAddTemplate);
-            top.Controls.Add(hint);
-            layout.Controls.Add(top, 0, 0);
-
-            // --- 第 1 列：輸出資料夾設定 ---
-            TableLayoutPanel outRow = new TableLayoutPanel();
-            outRow.Dock = DockStyle.Fill;
-            outRow.AutoSize = true;
-            outRow.ColumnCount = 3;
-            outRow.RowCount = 1;
-            outRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            outRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-            outRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            outRow.Margin = new Padding(0, 0, 0, 8);
-            Label lblOut = new Label();
-            lblOut.Text = "輸出資料夾：";
-            lblOut.AutoSize = true;
-            lblOut.Anchor = AnchorStyles.Left;
-            lblOut.Margin = new Padding(0, 8, 4, 0);
-            _txtOutput = new TextBox();
-            _txtOutput.ReadOnly = true;
-            _txtOutput.Dock = DockStyle.Fill;
-            _txtOutput.Text = _outputRoot;
-            _txtOutput.Margin = new Padding(0, 4, 6, 0);
-            _btnChangeOutput = new Button();
-            _btnChangeOutput.Text = "變更…";
-            _btnChangeOutput.AutoSize = true;
-            _btnChangeOutput.Padding = new Padding(8, 2, 8, 2);
-            _btnChangeOutput.Click += delegate { ChangeOutputFolder(); };
-            outRow.Controls.Add(lblOut, 0, 0);
-            outRow.Controls.Add(_txtOutput, 1, 0);
-            outRow.Controls.Add(_btnChangeOutput, 2, 0);
-            layout.Controls.Add(outRow, 0, 1);
-
-            // --- 第 2 列：清單 ---
+            // ===== 清單（Fill）=====
             _grid = new DataGridView();
             _grid.Dock = DockStyle.Fill;
             _grid.AllowUserToAddRows = false;
             _grid.AllowUserToDeleteRows = false;
-            _grid.AllowUserToResizeRows = false;
             _grid.RowHeadersVisible = false;
             _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             _grid.MultiSelect = false;
             _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
-            _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            _grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(4, 8, 4, 8);
-            _grid.EnableHeadersVisualStyles = true;
-            _grid.BackgroundColor = SystemColors.Window;
-            _grid.BorderStyle = BorderStyle.Fixed3D;
-            _grid.RowTemplate.MinimumHeight = Font.Height + 16;   // 加高行高，閱讀更輕鬆
-            _grid.DefaultCellStyle.Padding = new Padding(3, 4, 3, 4);
-
+            UiTheme.StyleGrid(_grid);
             DataGridViewCheckBoxColumn colCheck = new DataGridViewCheckBoxColumn();
             colCheck.HeaderText = "勾選";
             colCheck.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-            colCheck.Width = (int)(Font.Height * 2.4);
+            colCheck.Width = 60;
             DataGridViewTextBoxColumn colRowNo = MakeTextCol("列", DataGridViewAutoSizeColumnMode.AllCells);
             DataGridViewTextBoxColumn colName = MakeTextCol("標案名稱", DataGridViewAutoSizeColumnMode.Fill);
             colName.FillWeight = 45;
@@ -143,38 +70,95 @@ namespace TenderDocGen
             colMsg.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
             _grid.Columns.AddRange(new DataGridViewColumn[] {
                 colCheck, colRowNo, colName, colDocs, colState, colMsg });
-            layout.Controls.Add(_grid, 0, 2);
+            // 給清單留邊：用一個 padding 容器
+            Panel gridWrap = new Panel();
+            gridWrap.Dock = DockStyle.Fill;
+            gridWrap.BackColor = UiTheme.BgMain;
+            gridWrap.Padding = new Padding(18, 6, 18, 8);
+            gridWrap.Controls.Add(_grid);
+            Controls.Add(gridWrap);
 
-            // --- 第 3 列：操作列 ---
+            // ===== 操作列（Bottom，卡片底＋頂線）=====
+            Panel footer = new Panel();
+            footer.Dock = DockStyle.Bottom;
+            footer.AutoSize = true;
+            footer.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            footer.BackColor = UiTheme.BgCard;
             FlowLayoutPanel bottom = new FlowLayoutPanel();
-            bottom.Dock = DockStyle.Fill;
+            bottom.Dock = DockStyle.Top;
             bottom.AutoSize = true;
-            bottom.WrapContents = true;
-            bottom.Margin = new Padding(0, 6, 0, 0);
+            bottom.WrapContents = false;
+            bottom.Padding = new Padding(18, 12, 18, 12);
             _btnGenerate = new Button();
-            _btnGenerate.Text = "產生文件";
-            _btnGenerate.AutoSize = true;
-            _btnGenerate.Padding = new Padding(16, 5, 16, 5);
-            _btnGenerate.Font = new Font(Font, FontStyle.Bold);
+            _btnGenerate.Text = "✔ 產生文件"; _btnGenerate.AutoSize = true;
+            _btnGenerate.Padding = new Padding(22, 9, 22, 9);
+            UiTheme.StylePrimary(_btnGenerate);
             _btnGenerate.Click += delegate { GenerateChecked(); };
             _chkOverwrite = new CheckBox();
-            _chkOverwrite.Text = "重新產生（覆寫已存在的檔案）";
-            _chkOverwrite.AutoSize = true;
-            _chkOverwrite.Margin = new Padding(14, 10, 0, 0);
+            _chkOverwrite.Text = "重新產生（覆寫已存在的檔案）"; _chkOverwrite.AutoSize = true;
+            _chkOverwrite.ForeColor = UiTheme.TextPrimary; _chkOverwrite.Anchor = AnchorStyles.Left;
+            _chkOverwrite.Margin = new Padding(18, 0, 0, 0);
             _btnOpenOutput = new Button();
-            _btnOpenOutput.Text = "開啟輸出資料夾";
-            _btnOpenOutput.AutoSize = true;
-            _btnOpenOutput.Padding = new Padding(8, 4, 8, 4);
-            _btnOpenOutput.Margin = new Padding(14, 3, 0, 0);
+            _btnOpenOutput.Text = "📂 開啟輸出資料夾"; _btnOpenOutput.AutoSize = true;
+            _btnOpenOutput.Anchor = AnchorStyles.Left; _btnOpenOutput.Margin = new Padding(18, 0, 0, 0);
+            UiTheme.StyleButton(_btnOpenOutput);
             _btnOpenOutput.Click += delegate { OpenOutputFolder(); };
             _lblStatus = new Label();
-            _lblStatus.AutoSize = true;
-            _lblStatus.Margin = new Padding(18, 12, 0, 0);
+            _lblStatus.AutoSize = true; _lblStatus.ForeColor = UiTheme.TextSecondary;
+            _lblStatus.Anchor = AnchorStyles.Left; _lblStatus.Margin = new Padding(20, 6, 0, 0);
             bottom.Controls.Add(_btnGenerate);
             bottom.Controls.Add(_chkOverwrite);
             bottom.Controls.Add(_btnOpenOutput);
             bottom.Controls.Add(_lblStatus);
-            layout.Controls.Add(bottom, 0, 3);
+            Panel footerLine = new Panel();
+            footerLine.Dock = DockStyle.Top; footerLine.Height = 1; footerLine.BackColor = UiTheme.Border;
+            footer.Controls.Add(bottom);
+            footer.Controls.Add(footerLine);
+            Controls.Add(footer);
+
+            // ===== 輸出資料夾列（Top）=====
+            TableLayoutPanel outRow = new TableLayoutPanel();
+            outRow.Dock = DockStyle.Top;
+            outRow.AutoSize = true;
+            outRow.BackColor = UiTheme.BgMain;
+            outRow.ColumnCount = 3; outRow.RowCount = 1;
+            outRow.Padding = new Padding(18, 12, 18, 4);
+            outRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            outRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+            outRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            Label lblOut = new Label();
+            lblOut.Text = "輸出資料夾"; lblOut.AutoSize = true; lblOut.Anchor = AnchorStyles.Left;
+            lblOut.ForeColor = UiTheme.TextSecondary; lblOut.Margin = new Padding(0, 0, 12, 0);
+            _txtOutput = new TextBox();
+            _txtOutput.ReadOnly = true; _txtOutput.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            _txtOutput.Text = _outputRoot;
+            UiTheme.StyleTextBox(_txtOutput); _txtOutput.BackColor = UiTheme.BgSubtle;
+            _txtOutput.Margin = new Padding(0, 0, 10, 0);
+            _btnChangeOutput = new Button();
+            _btnChangeOutput.Text = "變更…"; _btnChangeOutput.AutoSize = true; _btnChangeOutput.Anchor = AnchorStyles.Left;
+            UiTheme.StyleButton(_btnChangeOutput);
+            _btnChangeOutput.Click += delegate { ChangeOutputFolder(); };
+            outRow.Controls.Add(lblOut, 0, 0);
+            outRow.Controls.Add(_txtOutput, 1, 0);
+            outRow.Controls.Add(_btnChangeOutput, 2, 0);
+            Controls.Add(outRow);
+
+            // ===== 頁首（Top，最後加入＝最外層）=====
+            FlowLayoutPanel toolbar = new FlowLayoutPanel();
+            toolbar.AutoSize = true; toolbar.WrapContents = false;
+            _btnReload = new Button();
+            _btnReload.Text = "🔄 重新讀取 Excel"; _btnReload.AutoSize = true;
+            _btnReload.Margin = new Padding(0, 0, 8, 0);
+            UiTheme.StyleButton(_btnReload);
+            _btnReload.Click += delegate { LoadPlan(); };
+            _btnAddTemplate = new Button();
+            _btnAddTemplate.Text = "🗂 範本管理…"; _btnAddTemplate.AutoSize = true;
+            _btnAddTemplate.Margin = new Padding(0);
+            UiTheme.StyleButton(_btnAddTemplate);
+            _btnAddTemplate.Click += delegate { ManageTemplates(); };
+            toolbar.Controls.Add(_btnReload);
+            toolbar.Controls.Add(_btnAddTemplate);
+            Controls.Add(UiTheme.Header("標案文件產生器", toolbar));
 
             Shown += delegate { LoadPlan(); };
         }
@@ -270,7 +254,7 @@ namespace TenderDocGen
                 row.Tag = rp;
                 if (rp.Errors.Count > 0)
                 {
-                    row.DefaultCellStyle.ForeColor = Color.Firebrick;
+                    row.DefaultCellStyle.ForeColor = UiTheme.Error;
                     row.Cells[ColCheck].ReadOnly = true;
                 }
             }
@@ -331,14 +315,14 @@ namespace TenderDocGen
                     {
                         errRows++;
                         row.Cells[ColState].Value = "有錯誤";
-                        row.DefaultCellStyle.ForeColor = Color.Firebrick;
+                        row.DefaultCellStyle.ForeColor = UiTheme.Error;
                     }
                     else
                     {
                         okRows++;
                         row.Cells[ColState].Value = RowState(rp);
                         row.Cells[ColCheck].Value = false;
-                        row.DefaultCellStyle.ForeColor = Color.ForestGreen;
+                        row.DefaultCellStyle.ForeColor = UiTheme.SuccessDark;
                     }
                     row.Cells[ColMessage].Value = string.Join("\n", msgs);
                 }

@@ -21,27 +21,13 @@ namespace TenderDocGen
         {
             _baseDir = baseDir;
             Text = "範本管理";
-            Font = new Font("Microsoft JhengHei UI", 12f);
+            UiTheme.StyleForm(this);
             AutoScaleMode = AutoScaleMode.Font;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(820, 520);
-            MinimumSize = new Size(640, 400);
+            ClientSize = new Size(1000, 660);
+            MinimumSize = new Size(760, 480);
 
-            TableLayoutPanel layout = new TableLayoutPanel();
-            layout.Dock = DockStyle.Fill;
-            layout.ColumnCount = 1;
-            layout.RowCount = 3;
-            layout.Padding = new Padding(12);
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            Controls.Add(layout);
-
-            Label hint = new Label();
-            hint.Text = "目前的文件範本。可新增新範本或移除不需要的範本（會同步調整 Excel 欄位）。";
-            hint.AutoSize = true; hint.Margin = new Padding(0, 0, 0, 8);
-            layout.Controls.Add(hint, 0, 0);
-
+            // ===== 清單（Fill）=====
             _grid = new DataGridView();
             _grid.Dock = DockStyle.Fill;
             _grid.AllowUserToAddRows = false;
@@ -51,37 +37,65 @@ namespace TenderDocGen
             _grid.MultiSelect = false;
             _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
-            _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            _grid.BackgroundColor = SystemColors.Window;
-            _grid.RowTemplate.MinimumHeight = Font.Height + 14;
+            UiTheme.StyleGrid(_grid);
             DataGridViewTextBoxColumn cName = new DataGridViewTextBoxColumn();
             cName.HeaderText = "範本名稱"; cName.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; cName.FillWeight = 40;
             DataGridViewTextBoxColumn cTok = new DataGridViewTextBoxColumn();
             cTok.HeaderText = "使用的參數"; cTok.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; cTok.FillWeight = 60;
             cTok.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
             _grid.Columns.AddRange(new DataGridViewColumn[] { cName, cTok });
-            layout.Controls.Add(_grid, 0, 1);
+            Panel gridWrap = new Panel();
+            gridWrap.Dock = DockStyle.Fill; gridWrap.BackColor = UiTheme.BgMain;
+            gridWrap.Padding = new Padding(18, 10, 18, 8);
+            gridWrap.Controls.Add(_grid);
+            Controls.Add(gridWrap);
 
+            // ===== 操作列（Bottom）=====
+            Panel footer = new Panel();
+            footer.Dock = DockStyle.Bottom; footer.AutoSize = true;
+            footer.AutoSizeMode = AutoSizeMode.GrowAndShrink; footer.BackColor = UiTheme.BgCard;
             FlowLayoutPanel buttons = new FlowLayoutPanel();
-            buttons.Dock = DockStyle.Fill; buttons.AutoSize = true;
+            buttons.Dock = DockStyle.Top; buttons.AutoSize = true; buttons.WrapContents = false;
+            buttons.Padding = new Padding(18, 12, 18, 12);
             _btnAdd = new Button();
-            _btnAdd.Text = "新增範本…"; _btnAdd.AutoSize = true; _btnAdd.Padding = new Padding(12, 5, 12, 5);
+            _btnAdd.Text = "＋ 新增範本…"; _btnAdd.AutoSize = true; _btnAdd.Padding = new Padding(16, 8, 16, 8);
+            UiTheme.StylePrimary(_btnAdd);
             _btnAdd.Click += delegate { DoAdd(); };
             _btnRemove = new Button();
-            _btnRemove.Text = "移除選取範本"; _btnRemove.AutoSize = true; _btnRemove.Padding = new Padding(12, 5, 12, 5);
-            _btnRemove.Margin = new Padding(10, 3, 0, 3);
+            _btnRemove.Text = "🗑 移除選取範本"; _btnRemove.AutoSize = true; _btnRemove.Padding = new Padding(14, 8, 14, 8);
+            _btnRemove.Anchor = AnchorStyles.Left; _btnRemove.Margin = new Padding(12, 0, 0, 0);
+            UiTheme.StyleDanger(_btnRemove);
             _btnRemove.Click += delegate { DoRemove(); };
             _btnClose = new Button();
-            _btnClose.Text = "關閉"; _btnClose.AutoSize = true; _btnClose.Padding = new Padding(12, 5, 12, 5);
-            _btnClose.Margin = new Padding(10, 3, 0, 3);
+            _btnClose.Text = "關閉"; _btnClose.AutoSize = true; _btnClose.Padding = new Padding(16, 8, 16, 8);
+            _btnClose.Anchor = AnchorStyles.Left; _btnClose.Margin = new Padding(12, 0, 0, 0);
+            UiTheme.StyleButton(_btnClose);
             _btnClose.Click += delegate { Close(); };
             _lblStatus = new Label();
-            _lblStatus.AutoSize = true; _lblStatus.Margin = new Padding(16, 12, 0, 0);
+            _lblStatus.AutoSize = true; _lblStatus.ForeColor = UiTheme.TextSecondary;
+            _lblStatus.Anchor = AnchorStyles.Left; _lblStatus.Margin = new Padding(20, 10, 0, 0);
             buttons.Controls.Add(_btnAdd);
             buttons.Controls.Add(_btnRemove);
             buttons.Controls.Add(_btnClose);
             buttons.Controls.Add(_lblStatus);
-            layout.Controls.Add(buttons, 0, 2);
+            Panel footerLine = new Panel();
+            footerLine.Dock = DockStyle.Top; footerLine.Height = 1; footerLine.BackColor = UiTheme.Border;
+            footer.Controls.Add(buttons);
+            footer.Controls.Add(footerLine);
+            Controls.Add(footer);
+
+            // ===== 說明列（Top）=====
+            Panel hintRow = new Panel();
+            hintRow.Dock = DockStyle.Top; hintRow.AutoSize = true; hintRow.BackColor = UiTheme.BgMain;
+            hintRow.Padding = new Padding(18, 10, 18, 2);
+            Label hint = new Label();
+            hint.Text = "目前的文件範本。可新增新範本或移除不需要的範本（會同步調整 Excel 欄位）。";
+            hint.AutoSize = true; hint.Dock = DockStyle.Top; UiTheme.StyleHint(hint);
+            hintRow.Controls.Add(hint);
+            Controls.Add(hintRow);
+
+            // ===== 頁首（Top，最後加入）=====
+            Controls.Add(UiTheme.Header("範本管理", null));
 
             Shown += delegate { RefreshList(); };
         }

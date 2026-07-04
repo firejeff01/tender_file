@@ -35,17 +35,18 @@ namespace TenderDocGen
             LoadPrefillValues();
 
             Text = "新增範本";
-            Font = new Font("Microsoft JhengHei UI", 12f);
+            UiTheme.StyleForm(this);
             AutoScaleMode = AutoScaleMode.Font;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(900, 640);
-            MinimumSize = new Size(720, 500);
+            ClientSize = new Size(1060, 740);
+            MinimumSize = new Size(820, 560);
 
             TableLayoutPanel layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
+            layout.BackColor = UiTheme.BgMain;
             layout.ColumnCount = 1;
             layout.RowCount = 4;
-            layout.Padding = new Padding(12);
+            layout.Padding = new Padding(18, 12, 18, 12);
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
@@ -55,22 +56,27 @@ namespace TenderDocGen
             // 第 0 列：選檔
             FlowLayoutPanel pick = new FlowLayoutPanel();
             pick.Dock = DockStyle.Fill; pick.AutoSize = true; pick.WrapContents = true;
+            pick.Margin = new Padding(0, 0, 0, 6);
             _btnPick = new Button();
-            _btnPick.Text = "選擇文件…"; _btnPick.AutoSize = true; _btnPick.Padding = new Padding(8, 4, 8, 4);
+            _btnPick.Text = "📄 選擇文件…"; _btnPick.AutoSize = true; _btnPick.Padding = new Padding(14, 7, 14, 7);
+            UiTheme.StylePrimary(_btnPick);
             _btnPick.Click += delegate { PickFile(); };
             _lblFile = new Label();
             _lblFile.Text = "請選擇一份「已把要替換的文字標成顏色」的 ODT 文件。";
-            _lblFile.AutoSize = true; _lblFile.Margin = new Padding(10, 10, 0, 0);
+            _lblFile.AutoSize = true; _lblFile.Margin = new Padding(12, 12, 0, 0);
+            UiTheme.StyleHint(_lblFile);
             pick.Controls.Add(_btnPick); pick.Controls.Add(_lblFile);
             layout.Controls.Add(pick, 0, 0);
 
             // 第 1 列：範本名稱
             FlowLayoutPanel nameRow = new FlowLayoutPanel();
-            nameRow.Dock = DockStyle.Fill; nameRow.AutoSize = true;
+            nameRow.Dock = DockStyle.Fill; nameRow.AutoSize = true; nameRow.Margin = new Padding(0, 0, 0, 6);
             Label lblN = new Label();
-            lblN.Text = "範本名稱："; lblN.AutoSize = true; lblN.Margin = new Padding(0, 8, 4, 0);
+            lblN.Text = "範本名稱"; lblN.AutoSize = true; lblN.Margin = new Padding(0, 9, 10, 0);
+            lblN.ForeColor = UiTheme.TextSecondary;
             _txtName = new TextBox();
-            _txtName.Width = 420; _txtName.Margin = new Padding(0, 4, 0, 0);
+            _txtName.Width = 460; _txtName.Margin = new Padding(0, 4, 0, 0);
+            UiTheme.StyleTextBox(_txtName);
             nameRow.Controls.Add(lblN); nameRow.Controls.Add(_txtName);
             layout.Controls.Add(nameRow, 0, 1);
 
@@ -81,9 +87,8 @@ namespace TenderDocGen
             _grid.AllowUserToDeleteRows = false;
             _grid.RowHeadersVisible = false;
             _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
-            _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             _grid.EditMode = DataGridViewEditMode.EditOnEnter;
-            _grid.RowTemplate.MinimumHeight = Font.Height + 14;
+            UiTheme.StyleGrid(_grid);
 
             DataGridViewTextBoxColumn cText = new DataGridViewTextBoxColumn();
             cText.HeaderText = "文字片段"; cText.ReadOnly = true;
@@ -109,17 +114,22 @@ namespace TenderDocGen
             // 第 3 列：確定/取消
             FlowLayoutPanel buttons = new FlowLayoutPanel();
             buttons.Dock = DockStyle.Fill; buttons.FlowDirection = FlowDirection.RightToLeft;
-            buttons.AutoSize = true;
+            buttons.AutoSize = true; buttons.Margin = new Padding(0, 8, 0, 0);
             _btnOk = new Button();
-            _btnOk.Text = "建立範本"; _btnOk.AutoSize = true; _btnOk.Padding = new Padding(14, 5, 14, 5);
-            _btnOk.Font = new Font(Font, FontStyle.Bold); _btnOk.Enabled = false;
+            _btnOk.Text = "✔ 建立範本"; _btnOk.AutoSize = true; _btnOk.Padding = new Padding(18, 8, 18, 8);
+            _btnOk.Enabled = false;
+            UiTheme.StyleSuccess(_btnOk);
             _btnOk.Click += delegate { DoCommit(); };
             _btnCancel = new Button();
-            _btnCancel.Text = "取消"; _btnCancel.AutoSize = true; _btnCancel.Padding = new Padding(10, 5, 10, 5);
-            _btnCancel.Margin = new Padding(0, 0, 10, 0);
+            _btnCancel.Text = "取消"; _btnCancel.AutoSize = true; _btnCancel.Padding = new Padding(16, 8, 16, 8);
+            _btnCancel.Margin = new Padding(0, 0, 12, 0);
+            UiTheme.StyleButton(_btnCancel);
             _btnCancel.Click += delegate { DialogResult = DialogResult.Cancel; Close(); };
             buttons.Controls.Add(_btnOk); buttons.Controls.Add(_btnCancel);
             layout.Controls.Add(buttons, 0, 3);
+
+            // 頁首（Top，最後加入）
+            Controls.Add(UiTheme.Header("新增範本", null));
         }
 
         List<string> TokenChoices()
@@ -343,27 +353,28 @@ namespace TenderDocGen
             using (Form f = new Form())
             {
                 f.Text = "新增參數";
-                f.Font = new Font("Microsoft JhengHei UI", 12f);
+                UiTheme.StyleForm(f);
                 f.FormBorderStyle = FormBorderStyle.FixedDialog;
                 f.StartPosition = FormStartPosition.CenterParent;
                 f.MinimizeBox = false; f.MaximizeBox = false;
-                f.ClientSize = new Size(440, 230);
+                f.ClientSize = new Size(460, 240);
 
                 Label lbl = new Label();
-                lbl.Text = "參數名稱（會成為 Excel 欄位名）："; lbl.SetBounds(16, 16, 400, 24); lbl.AutoSize = true;
-                TextBox txt = new TextBox(); txt.SetBounds(16, 46, 400, 30);
+                lbl.Text = "參數名稱（會成為 Excel 欄位名）："; lbl.SetBounds(18, 18, 420, 24); lbl.AutoSize = true;
+                lbl.ForeColor = UiTheme.TextSecondary;
+                TextBox txt = new TextBox(); txt.SetBounds(18, 48, 424, 30); UiTheme.StyleTextBox(txt);
                 GroupBox gb = new GroupBox();
-                gb.Text = "這個參數的類型"; gb.SetBounds(16, 86, 400, 90);
+                gb.Text = "這個參數的類型"; gb.SetBounds(18, 90, 424, 92); gb.ForeColor = UiTheme.TextPrimary;
                 RadioButton rbCase = new RadioButton();
-                rbCase.Text = "每案不同（填在「標案清單」每一列）"; rbCase.SetBounds(14, 26, 370, 26); rbCase.Checked = true;
+                rbCase.Text = "每案不同（填在「標案清單」每一列）"; rbCase.SetBounds(16, 28, 390, 26); rbCase.Checked = true;
                 RadioButton rbCompany = new RadioButton();
-                rbCompany.Text = "公司固定（填一次在「公司資料」）"; rbCompany.SetBounds(14, 54, 370, 26);
+                rbCompany.Text = "公司固定（填一次在「公司資料」）"; rbCompany.SetBounds(16, 56, 390, 26);
                 gb.Controls.Add(rbCase); gb.Controls.Add(rbCompany);
 
                 Button ok = new Button();
-                ok.Text = "確定"; ok.DialogResult = DialogResult.OK; ok.SetBounds(232, 188, 90, 32);
+                ok.Text = "確定"; ok.DialogResult = DialogResult.OK; ok.SetBounds(248, 196, 92, 34); UiTheme.StylePrimary(ok);
                 Button cancel = new Button();
-                cancel.Text = "取消"; cancel.DialogResult = DialogResult.Cancel; cancel.SetBounds(326, 188, 90, 32);
+                cancel.Text = "取消"; cancel.DialogResult = DialogResult.Cancel; cancel.SetBounds(348, 196, 92, 34); UiTheme.StyleButton(cancel);
                 f.Controls.AddRange(new Control[] { lbl, txt, gb, ok, cancel });
                 f.AcceptButton = ok; f.CancelButton = cancel;
 
