@@ -1,0 +1,17 @@
+# 執行期產生的檔案（不進版控）
+輸出/*
+!輸出/.gitkeep
+設定.txt
+selftest.log
+selftest_tmp/
+
+# 暫存與鎖定檔
+*.tmp
+~$*.xlsx
+~$*.xls
+~$*.docx
+
+# 編輯器 / 系統
+Thumbs.db
+Desktop.ini
+.vs/

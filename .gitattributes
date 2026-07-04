@@ -1,0 +1,18 @@
+# 預設自動處理文字檔換行
+* text=auto
+
+# 批次檔在 Windows 上須為 CRLF
+*.bat text eol=crlf
+
+# 原始碼統一 LF
+*.cs text eol=lf
+*.ps1 text eol=lf
+
+# 二進位檔（不做換行/diff 處理）
+*.odt binary
+*.xlsx binary
+*.xls binary
+*.docx binary
+*.exe binary
+*.png binary
+*.jpg binary
