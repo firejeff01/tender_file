@@ -16,6 +16,7 @@ namespace TenderDocGen
 
         readonly string _baseDir;
         string _odtPath;
+        string _tempOdt;               // Word 轉入時的暫存 ODT（關閉/重選時清除）
         TemplateBuilder _builder;
         List<ColoredRun> _runs;
         readonly Dictionary<string, bool> _newTokenIsCompany = new Dictionary<string, bool>();
@@ -61,7 +62,7 @@ namespace TenderDocGen
             UiTheme.StylePrimary(_btnPick);
             _btnPick.Click += delegate { PickFile(); };
             _lblFile = new Label();
-            _lblFile.Text = "請選擇一份「已把要替換的文字標成顏色」的 ODT 文件。";
+            _lblFile.Text = "請選擇一份「已把要替換的文字標成顏色」的 ODT 或 Word 文件。";
             _lblFile.AutoSize = true; _lblFile.Margin = new Padding(12, 12, 0, 0);
             UiTheme.StyleHint(_lblFile);
             pick.Controls.Add(_btnPick); pick.Controls.Add(_lblFile);
@@ -178,37 +179,84 @@ namespace TenderDocGen
         {
             using (OpenFileDialog dlg = new OpenFileDialog())
             {
-                dlg.Filter = "ODF 文字文件 (*.odt)|*.odt|所有檔案 (*.*)|*.*";
-                dlg.Title = "選擇要作為範本的 ODT 文件";
+                dlg.Filter = "文件範本 (*.odt;*.docx)|*.odt;*.docx|ODF 文字文件 (*.odt)|*.odt|" +
+                             "Word 文件 (*.docx)|*.docx|所有檔案 (*.*)|*.*";
+                dlg.Title = "選擇要作為範本的文件（ODT 或 Word）";
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                LoadOdt(dlg.FileName);
+                LoadSource(dlg.FileName);
             }
         }
 
-        void LoadOdt(string path)
+        // 選檔入口：Word 先轉成暫存 ODT 再走既有流程；ODT 直接載入。
+        void LoadSource(string path)
+        {
+            _btnOk.Enabled = false;
+            _odtPath = null;
+            CleanupTemp();
+            // 重選檔案時先清空舊狀態，避免載入失敗後仍顯示上一份檔案的對應表（誤導）
+            _grid.Rows.Clear();
+            _txtName.Text = "";
+            _lblFile.Text = "請選擇一份「已把要替換的文字標成顏色」的 ODT 或 Word 文件。";
+
+            string odtPath = path;
+            if (string.Equals(Path.GetExtension(path), ".docx", StringComparison.OrdinalIgnoreCase))
+            {
+                byte[] odtBytes;
+                List<string> warnings;
+                try
+                {
+                    odtBytes = DocxToOdt.Convert(path, out warnings);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "無法把這份 Word 轉為範本：\n\n" + ex.Message, "無法轉換 Word",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                try
+                {
+                    _tempOdt = Path.Combine(Path.GetTempPath(), "tdg_" + Guid.NewGuid().ToString("N") + ".odt");
+                    File.WriteAllBytes(_tempOdt, odtBytes);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "無法建立暫存檔：\n" + ex.Message, "錯誤",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                odtPath = _tempOdt;
+                if (warnings != null && warnings.Count > 0)
+                    MessageBox.Show(this, "已從 Word 轉入，但有以下提醒：\n・" + string.Join("\n・", warnings),
+                        "轉換提醒", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            LoadOdt(odtPath, Path.GetFileName(path), Path.GetFileNameWithoutExtension(path));
+        }
+
+        void LoadOdt(string odtPath, string displayFile, string displayName)
         {
             try
             {
-                _builder = TemplateBuilder.Load(path);
+                _builder = TemplateBuilder.Load(odtPath);
                 _runs = _builder.ExtractRuns();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "無法讀取這份 ODT：\n" + ex.Message, "錯誤",
+                MessageBox.Show(this, "無法讀取這份文件：\n" + ex.Message, "錯誤",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             if (_runs.Count == 0)
             {
                 MessageBox.Show(this,
-                    "這份文件裡偵測不到彩色文字。\n請先在文件中把要替換的欄位標成顏色"
-                    + "（例如公司資料用紅色、每案資料用藍色）再試一次。",
+                    "這份文件裡偵測不到彩色文字。\n請把要替換的欄位用「字型色彩（文字顏色）」標成顏色"
+                    + "（例如公司資料用紅色、每案資料用藍色）再試一次。\n"
+                    + "註：螢光筆／醒目提示、或套用「字元樣式」帶出的顏色不會被偵測到，請直接改文字顏色。",
                     "沒有可參數化的內容", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            _odtPath = path;
-            _lblFile.Text = Path.GetFileName(path) + "（偵測到 " + _runs.Count + " 段彩色文字）";
-            _txtName.Text = Path.GetFileNameWithoutExtension(path);
+            _odtPath = odtPath;
+            _lblFile.Text = displayFile + "（偵測到 " + _runs.Count + " 段彩色文字）";
+            _txtName.Text = displayName;
 
             _grid.Rows.Clear();
             foreach (ColoredRun run in _runs)
@@ -229,6 +277,20 @@ namespace TenderDocGen
             string token;
             if (_valueToToken.TryGetValue(t, out token)) return token;
             return Pick;
+        }
+
+        void CleanupTemp()
+        {
+            if (_tempOdt == null) return;
+            try { if (File.Exists(_tempOdt)) File.Delete(_tempOdt); }
+            catch { /* 暫存檔清不掉不影響結果，忽略 */ }
+            _tempOdt = null;
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            CleanupTemp();
+            base.OnFormClosed(e);
         }
 
         void Grid_CellValueChanged(object sender, DataGridViewCellEventArgs e)

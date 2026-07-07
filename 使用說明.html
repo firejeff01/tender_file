@@ -202,14 +202,15 @@
 
       <h3>新增一種文件範本</h3>
       <ol class="steps">
-        <li>準備一份該文件的 ODT，把「要每次替換的文字」標上顏色：
+        <li>準備一份該文件的 ODT 或 Word（.docx），把「要每次替換的文字」標上顏色：
           <ul>
             <li><span class="swatch red"></span><b>紅色</b>＝公司固定資料（公司名、負責人、電話、地址）</li>
             <li><span class="swatch blue"></span><b>藍色</b>＝每案不同的資料（機關、案名、日期…）</li>
           </ul>
-          <span style="color:var(--text-muted);font-size:14px;">（顏色只是給工具辨識用，產生出來的正式文件會是黑字。）</span>
+          <span style="color:var(--text-muted);font-size:14px;">（顏色只是給工具辨識用，產生出來的正式文件會是黑字。顏色請用「字型色彩（文字顏色）」，不要用螢光筆／醒目提示或字元樣式。）</span>
+          <br><span style="color:var(--text-muted);font-size:14px;">※ 選 Word 檔時工具會自動轉成 ODT 範本（產出仍是 ODT）。支援純文字、格式、清單／編號；若含表格、圖片、文字方塊、頁首／頁尾內容會提示無法轉換，請改用 ODT 或先移除這些元素。</span>
         </li>
-        <li>在「範本管理」按 <span class="btn primary">＋ 新增範本…</span>，選那份 ODT。工具會列出所有彩色片段並盡量幫你對好參數：
+        <li>在「範本管理」按 <span class="btn primary">＋ 新增範本…</span>，選那份 ODT 或 Word 檔。工具會列出所有彩色片段並盡量幫你對好參數：
           <ul>
             <li>已知的公司資料會<b>自動對應</b>（顯示廠商名稱、聯絡電話…）。</li>
             <li>新的欄位會顯示「（請選擇）」，可從下拉選現有參數，或選「＋ 新增參數…」自己命名（並指定「每案不同」或「公司固定」）。</li>

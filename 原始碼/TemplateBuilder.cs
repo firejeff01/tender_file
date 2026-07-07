@@ -153,9 +153,24 @@ namespace TenderDocGen
                 XElement newSpan = new XElement(NsText + "span",
                     new XAttribute(NsText + "style-name", paramStyle),
                     "${" + token + "}");
+                // AdjacentSpan 合併時會穿透 span 之間「只有空白」的文字節點；這些空白不屬於任何一段，
+                // 若不清掉會殘留在 ${token} 旁邊（多出空格）。先蒐集再一併移除。
+                List<XText> tunneledWs = new List<XText>();
+                for (int i = 0; i + 1 < run.Spans.Count; i++)
+                {
+                    XNode n = run.Spans[i].NextNode;
+                    while (n != null && n != run.Spans[i + 1])
+                    {
+                        XText t = n as XText;
+                        if (t != null) tunneledWs.Add(t);
+                        n = n.NextNode;
+                    }
+                }
                 run.Spans[0].ReplaceWith(newSpan);
                 for (int i = 1; i < run.Spans.Count; i++)
                     if (run.Spans[i].Parent != null) run.Spans[i].Remove();
+                foreach (XText ws in tunneledWs)
+                    if (ws.Parent != null) ws.Remove();
             }
 
             RemoveOrphanColorStyles();

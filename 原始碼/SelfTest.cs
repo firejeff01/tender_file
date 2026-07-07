@@ -51,6 +51,8 @@ namespace TenderDocGen
                     TestPhoneticRuby();
                     TestRegenerateClearsFolder(store, tmpDir);
                     TestTemplateBuilder(tmpDir);
+                    TestDocxToOdt(tmpDir);
+                    TestMergeWhitespaceFix(tmpDir);
                     TestXlsxEditor(baseDir, tmpDir);
                     TestXlsxInsertPositionAndRemove(baseDir, tmpDir);
                     TestValidationShrinkOnRemove(baseDir, tmpDir);
@@ -484,6 +486,240 @@ namespace TenderDocGen
             Check(body.Contains("端到端公司") && body.Contains("高雄市測試路9號") && body.Contains("測試縣政府"),
                 "Builder 範本替換值正確", null);
             Check(!body.Contains("測試公司股份有限公司"), "Builder 範本無殘留示範文字", null);
+        }
+
+        // ============================== DocxToOdt：Word 轉範本來源 ==============================
+        static void TestDocxToOdt(string tmpDir)
+        {
+            XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+            Func<string, string, bool, XElement> crun = delegate(string color, string txt, bool bold)
+            {
+                XElement rPr = new XElement(w + "rPr");
+                if (color != null) rPr.Add(new XElement(w + "color", new XAttribute(w + "val", color)));
+                if (bold) rPr.Add(new XElement(w + "b"));
+                XElement r = new XElement(w + "r");
+                if (rPr.HasElements) r.Add(rPr);
+                r.Add(new XElement(w + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), txt));
+                return r;
+            };
+            Func<string, XElement> listPara = delegate(string txt)
+            {
+                return new XElement(w + "p",
+                    new XElement(w + "pPr", new XElement(w + "numPr",
+                        new XElement(w + "ilvl", new XAttribute(w + "val", "0")),
+                        new XElement(w + "numId", new XAttribute(w + "val", "1")))),
+                    new XElement(w + "r", new XElement(w + "t",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"), txt)));
+            };
+
+            XElement body = new XElement(w + "body",
+                new XElement(w + "p",
+                    crun("FF0000", "測試公司股份有限公司", false),
+                    crun(null, "，委派至", false),
+                    crun("0070C0", "某某縣政府", true),
+                    crun(null, "辦理。", false)),
+                listPara("第一項"),
+                listPara("第二項"),
+                new XElement(w + "p",
+                    new XElement(w + "pPr", new XElement(w + "jc", new XAttribute(w + "val", "center"))),
+                    crun(null, "報告完畢", false)),
+                // 區塊層級 sdt（內容控制項）包住的段落——不可被漏掉
+                new XElement(w + "sdt", new XElement(w + "sdtContent",
+                    new XElement(w + "p", crun(null, "內容控制項段落", false)))),
+                // 超連結內含追蹤修訂插入(ins)的 run——巢狀容器不可漏字
+                new XElement(w + "p",
+                    new XElement(w + "hyperlink",
+                        new XElement(w + "ins", new XAttribute(w + "id", "1"),
+                            crun(null, "連結插入文字", false)))),
+                // 簡單功能變數（w:fldSimple）的結果 run——不可漏字
+                new XElement(w + "p",
+                    new XElement(w + "fldSimple", new XAttribute(w + "instr", " REF x "),
+                        crun(null, "功能變數文字", false))),
+                // 由段落樣式（w:pStyle）帶出編號的清單段落
+                new XElement(w + "p",
+                    new XElement(w + "pPr", new XElement(w + "pStyle", new XAttribute(w + "val", "ListNumber"))),
+                    crun(null, "樣式編號項", false)),
+                new XElement(w + "sectPr",
+                    new XElement(w + "pgSz", new XAttribute(w + "w", "11906"), new XAttribute(w + "h", "16838")),
+                    new XElement(w + "pgMar", new XAttribute(w + "top", "1440"), new XAttribute(w + "right", "1440"),
+                        new XAttribute(w + "bottom", "1440"), new XAttribute(w + "left", "1440"))));
+            XDocument document = new XDocument(new XElement(w + "document", body));
+            XDocument numbering = new XDocument(new XElement(w + "numbering",
+                new XElement(w + "abstractNum", new XAttribute(w + "abstractNumId", "0"),
+                    new XElement(w + "lvl", new XAttribute(w + "ilvl", "0"),
+                        new XElement(w + "numFmt", new XAttribute(w + "val", "decimal")),
+                        new XElement(w + "lvlText", new XAttribute(w + "val", "%1.")))),
+                new XElement(w + "num", new XAttribute(w + "numId", "1"),
+                    new XElement(w + "abstractNumId", new XAttribute(w + "val", "0")))));
+            XDocument styles = new XDocument(new XElement(w + "styles",
+                new XElement(w + "style", new XAttribute(w + "type", "paragraph"),
+                    new XAttribute(w + "styleId", "ListNumber"),
+                    new XElement(w + "pPr", new XElement(w + "numPr",
+                        new XElement(w + "ilvl", new XAttribute(w + "val", "0")),
+                        new XElement(w + "numId", new XAttribute(w + "val", "1")))))));
+
+            byte[] docx = BuildDocx(document, numbering, styles);
+            List<string> warnings;
+            byte[] odt = DocxToOdt.ConvertBytes(docx, out warnings);
+            Check(TemplateBuilder.ValidateTemplateBytes(odt).Count == 0, "Docx→Odt 產出 zip/xml 有效",
+                string.Join("；", TemplateBuilder.ValidateTemplateBytes(odt)));
+
+            string raw = Path.Combine(tmpDir, "docx_raw.odt");
+            File.WriteAllBytes(raw, odt);
+
+            // styles.xml 存在、well-formed、A4 頁寬
+            string stylesXml = ReadOdtEntry(raw, "styles.xml");
+            Check(stylesXml != null && stylesXml.Contains("master-page") && stylesXml.Contains("page-width=\"21"),
+                "Docx→Odt styles.xml 有頁面版面（A4）", stylesXml == null ? "null" :
+                (stylesXml.Contains("page-width=\"21") ? "ok" : "無 21cm 頁寬"));
+
+            // 用既有 TemplateBuilder 擷取彩色 run（紅/藍兩段）
+            TemplateBuilder tb = TemplateBuilder.Load(raw);
+            List<ColoredRun> runs = tb.ExtractRuns();
+            Check(runs.Count == 2, "Docx→Odt 擷取 2 個彩色 run",
+                runs.Count + "：" + string.Join(",", runs.Select(r => r.Text)));
+            Check(runs.Any(r => r.Text == "測試公司股份有限公司" && r.Category == "red")
+                && runs.Any(r => r.Text == "某某縣政府" && r.Category == "blue"),
+                "Docx→Odt 紅/藍 run 文字與分類正確",
+                string.Join("|", runs.Select(r => r.Text + "=" + r.Category)));
+
+            // 正規化 → 存範本 → 端到端產生
+            Dictionary<string, string> map = new Dictionary<string, string>();
+            foreach (ColoredRun r in runs)
+            {
+                if (r.Text.Contains("測試公司")) map[r.Id] = "廠商名稱";
+                else if (r.Text.Contains("縣政府")) map[r.Id] = "機關名稱";
+            }
+            byte[] built = tb.Build(map);
+            Check(TemplateBuilder.ValidateTemplateBytes(built).Count == 0, "Docx→Odt 正規化後仍有效", null);
+
+            string tdir = Path.Combine(tmpDir, "docx範本");
+            Directory.CreateDirectory(tdir);
+            File.WriteAllBytes(Path.Combine(tdir, "Word範本.odt"), built);
+            TemplateStore.RewriteTokensFile(tdir);
+            TemplateStore store = TemplateStore.Load(tdir);
+            TemplateInfo tpl = store.Templates[0];
+            Check(tpl.Tokens.SetEquals(new HashSet<string> { "廠商名稱", "機關名稱" }),
+                "Docx→Odt 範本 token 集合正確", string.Join(",", tpl.Tokens.OrderBy(x => x)));
+
+            RowPlan rp = new RowPlan();
+            rp.RowNumber = 2; rp.TenderName = "Word端到端案"; rp.FolderName = "Word端到端案"; rp.Docs.Add(tpl);
+            rp.Values["廠商名稱"] = "轉入公司"; rp.Values["機關名稱"] = "轉入縣政府";
+            RowResult res = Generator.GenerateRow(rp, Path.Combine(tmpDir, "docx輸出"), false, false);
+            Check(res.Errors.Count == 0 && res.Generated.Count == 1, "Docx→Odt 範本可被 Generator 產生",
+                string.Join("；", res.Errors));
+            string outBody = ReadOdtBodyText(Path.Combine(tmpDir, "docx輸出", "Word端到端案", "Word範本.odt"));
+            Check(outBody.Contains("轉入公司") && outBody.Contains("轉入縣政府"),
+                "Docx→Odt 替換值正確", null);
+            Check(outBody.Contains("第一項") && outBody.Contains("第二項") && outBody.Contains("報告完畢"),
+                "Docx→Odt 清單與段落文字保留", null);
+            string outContent = ReadOdtContentXml(Path.Combine(tmpDir, "docx輸出", "Word端到端案", "Word範本.odt"));
+            Check(outContent.Contains("<text:list"), "Docx→Odt 清單轉為 text:list", null);
+            Check(outContent.Contains("text-align=\"center\""), "Docx→Odt 置中對齊保留", null);
+            Check(outContent.Contains("style:num-suffix=\".\"") && !outContent.Contains("text:num-suffix"),
+                "Docx→Odt 編號後綴用 style:num-suffix（ODF 合規，非 text:）",
+                outContent.Contains("text:num-suffix") ? "仍有 text:num-suffix" : "ok");
+            Check(outBody.Contains("內容控制項段落"), "Docx→Odt 區塊 sdt 段落不遺失", null);
+            Check(outBody.Contains("連結插入文字"), "Docx→Odt 超連結內巢狀 run 不遺失", null);
+            Check(outBody.Contains("功能變數文字"), "Docx→Odt fldSimple 結果 run 不遺失", null);
+            Check(outBody.Contains("樣式編號項"), "Docx→Odt pStyle 清單段落文字保留", null);
+            int listCount = outContent.Split(new string[] { "<text:list " }, StringSplitOptions.None).Length - 1;
+            Check(listCount >= 2, "Docx→Odt pStyle 段落亦成為 text:list（≥2 個清單）", "listCount=" + listCount);
+
+            // 不支援結構（表格）→ 明確報錯
+            XDocument tableDoc = new XDocument(new XElement(w + "document",
+                new XElement(w + "body",
+                    new XElement(w + "tbl", new XElement(w + "tr", new XElement(w + "tc",
+                        new XElement(w + "p", new XElement(w + "r", new XElement(w + "t", "x")))))))));
+            byte[] tdocx = BuildDocx(tableDoc, null);
+            bool threw = false; string msg = "";
+            try { List<string> ww; DocxToOdt.ConvertBytes(tdocx, out ww); }
+            catch (InvalidDataException ex) { threw = true; msg = ex.Message; }
+            Check(threw && msg.Contains("表格"), "Docx→Odt 含表格→明確報錯", msg);
+        }
+
+        // ============================== 合併時穿透的空白不殘留於 ${token} 旁 ==============================
+        static void TestMergeWhitespaceFix(string tmpDir)
+        {
+            XNamespace o = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
+            XNamespace t = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
+            XNamespace s = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+            XNamespace fo = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0";
+            // 兩段紅色 span，中間只隔一個「未上色的空白文字節點」，後接一般文字
+            XDocument doc = new XDocument(new XDeclaration("1.0", "UTF-8", null),
+                new XElement(o + "document-content",
+                    new XElement(o + "automatic-styles",
+                        new XElement(s + "style", new XAttribute(s + "name", "C_RED"), new XAttribute(s + "family", "text"),
+                            new XElement(s + "text-properties", new XAttribute(fo + "color", "#FF0000")))),
+                    new XElement(o + "body", new XElement(o + "text",
+                        new XElement(t + "p",
+                            new XElement(t + "span", new XAttribute(t + "style-name", "C_RED"), "甲"),
+                            " ",
+                            new XElement(t + "span", new XAttribute(t + "style-name", "C_RED"), "乙"),
+                            "後續")))));
+            byte[] content;
+            using (MemoryStream ms = new MemoryStream())
+            {
+                XmlWriterSettings set = new XmlWriterSettings();
+                set.Encoding = new UTF8Encoding(false); set.Indent = false;
+                using (XmlWriter xw = XmlWriter.Create(ms, set)) { doc.Save(xw); }
+                content = ms.ToArray();
+            }
+            List<KeyValuePair<string, byte[]>> entries = new List<KeyValuePair<string, byte[]>>();
+            entries.Add(new KeyValuePair<string, byte[]>("mimetype",
+                Encoding.ASCII.GetBytes("application/vnd.oasis.opendocument.text")));
+            entries.Add(new KeyValuePair<string, byte[]>("content.xml", content));
+            string raw = Path.Combine(tmpDir, "ws_raw.odt");
+            File.WriteAllBytes(raw, OdtWriter.Repack(entries));
+
+            TemplateBuilder tb = TemplateBuilder.Load(raw);
+            List<ColoredRun> runs = tb.ExtractRuns();
+            Check(runs.Count == 1 && runs[0].Text == "甲乙",
+                "空白合併：兩段同色 span 穿透空白合成一段", runs.Count + ":" + (runs.Count > 0 ? runs[0].Text : ""));
+            Dictionary<string, string> map = new Dictionary<string, string>();
+            foreach (ColoredRun r in runs) map[r.Id] = "廠商名稱";
+            byte[] built = tb.Build(map);
+
+            string tdir = Path.Combine(tmpDir, "ws範本");
+            Directory.CreateDirectory(tdir);
+            File.WriteAllBytes(Path.Combine(tdir, "空白測試.odt"), built);
+            TemplateStore.RewriteTokensFile(tdir);
+            TemplateStore store = TemplateStore.Load(tdir);
+            RowPlan rp = new RowPlan();
+            rp.RowNumber = 2; rp.TenderName = "空白案"; rp.FolderName = "空白案"; rp.Docs.Add(store.Templates[0]);
+            rp.Values["廠商名稱"] = "值";
+            RowResult res = Generator.GenerateRow(rp, Path.Combine(tmpDir, "ws輸出"), false, false);
+            Check(res.Errors.Count == 0 && res.Generated.Count == 1, "空白合併：可產生", string.Join("；", res.Errors));
+            string body = ReadOdtBodyText(Path.Combine(tmpDir, "ws輸出", "空白案", "空白測試.odt"));
+            Check(body.Contains("值後續") && !body.Contains("值 後續"),
+                "空白合併：${token} 旁無殘留空格", "'" + body + "'");
+        }
+
+        /// <summary>把 document.xml（與可選 numbering.xml / styles.xml）打包成最小 .docx（僅含轉換器會讀的 part）。</summary>
+        static byte[] BuildDocx(XDocument document, XDocument numbering, XDocument styles = null)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                using (ZipArchive zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
+                {
+                    WriteXml(zip, "word/document.xml", document);
+                    if (numbering != null) WriteXml(zip, "word/numbering.xml", numbering);
+                    if (styles != null) WriteXml(zip, "word/styles.xml", styles);
+                }
+                return ms.ToArray();
+            }
+        }
+
+        static string ReadOdtEntry(string path, string entryName)
+        {
+            using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (ZipArchive zip = new ZipArchive(fs, ZipArchiveMode.Read))
+            {
+                ZipArchiveEntry e = zip.GetEntry(entryName);
+                if (e == null) return null;
+                using (StreamReader sr = new StreamReader(e.Open(), Encoding.UTF8)) return sr.ReadToEnd();
+            }
         }
 
         // ============================== XlsxEditor：加欄/加列 ==============================
